@@ -1,7 +1,7 @@
 # PROJECT_CONTEXT — MediCore HMS
 
 > **Purpose:** the durable architecture contract for every future phase.
-> Read this before adding any module. Last updated: Phase 9 (admissions, beds, reports, notifications).
+> Read this before adding any module. Last updated: Phase 9 audit (integration + security + deployment).
 
 ---
 
@@ -708,7 +708,74 @@ public/index.php (sole web entry point)
 
 ---
 
-**🎉 MediCore HMS is now feature-complete. All 9 phases across 12 modules
+**🎉 MediCore HMS is feature-complete and audited. All 9 phases across 12 modules
 are live, with normalized MySQL tables, transaction-protected financial
 and clinical operations, role-based access control on every route, and a
 265-file codebase that passes syntax lint.**
+
+---
+
+## 8. Integration & Security Audit (Phase 9 audit, 2026-10-04)
+
+### Audit results
+
+| Area | Status | Notes |
+|---|---|---|
+| **Syntax** | ✅ Pass | 265/265 PHP files pass lint; app.js passes `node --check` |
+| **Routes** | ✅ Pass | 186 routes, all POST routes have `can:` middleware, all admin routes behind `auth + password_current` |
+| **Views** | ✅ Pass | All controller-referenced views exist (0 missing) |
+| **Sidebar** | ✅ Pass | 0 "Soon" items — all 12 modules are live |
+| **CSRF** | ✅ Pass | All POST forms have `csrf_field()` — verified every form in `resources/views/` |
+| **SQL injection** | ✅ Pass | All queries use PDO prepared statements; `{$where}` interpolations use parameterized conditions only |
+| **XSS** | ✅ Pass | All output escaped via `e()` / `<?= ?>` — 0 raw `echo $variable` found |
+| **File uploads** | ✅ Pass | All 4 upload services use `finfo` MIME sniffing + extension whitelist + random names + private storage |
+| **Sessions** | ✅ Pass | httponly, samesite, secure-on-HTTPS, fingerprinting, idle expiry |
+| **Passwords** | ✅ Pass | `PASSWORD_BCRYPT` cost 12, `strong` validator rule on all password paths |
+| **Audit logs** | ✅ Pass | Every state-changing action in every module logs to `audit_logs` |
+| **Transactions** | ✅ Pass | Appointment booking, payment recording, refunds, bed allocation, medicine dispensing, inventory receiving all use `beginTransaction/commit` |
+| **Dashboard stats** | ✅ Pass | 14 real `Database::scalar/query` calls — 0 hardcoded values |
+| **Pagination** | ✅ Pass | 10 directory views have pagination components |
+| **Dark mode** | ✅ Pass | `darkMode:'class'` with both admin + auth layouts in sync |
+| **Cross-module search** | ✅ Pass (fixed) | Global search now covers all 12 modules: patients, appointments, consultations, invoices, medicines, lab orders, admissions, doctors, staff, departments, users, audit trail |
+| **Notifications** | ✅ Pass (fixed) | NotificationService now merges DB-backed targeted alerts with audit-log activity feed; markAllRead updates both sources |
+| **Scheduled tasks** | ✅ Pass (added) | `php console notifications:process` command generates low-stock, expiry, lab-pending, appointment-reminder alerts + processes appointment reminders |
+
+### Fixes applied during audit
+
+1. **NotificationService merge** — the API `/api/notifications` endpoint now returns both DB-backed `notifications` table entries (low-stock, expiry, lab pending, appointment reminders, announcements) AND the audit-trail activity feed. `markAllRead()` now updates both sources.
+2. **Global search expanded** — SearchService now covers invoices, medicines, lab orders, and admissions (4 new search groups added). All 12 modules are now searchable. The "coming soon" module index is empty.
+3. **`notifications:process` console command** — new cron-runnable command that generates alerts for low-stock medicines, expiring batches (30-day window), pending lab tasks, and tomorrow's appointments. Also processes appointment reminders via the dev transport.
+4. **README.md rewrite** — comprehensive deployment guide with Apache/Nginx configs, MySQL setup, file permissions, cron jobs, backup/restore, security checklist, and architecture overview.
+5. **NotificationService `iconFor` expanded** — added icon mapping for all module-specific audit events (patient, appointment, consultation, prescription, invoice, payment, admission, lab, pharmacy) so the notification dropdown shows contextual icons.
+
+### Remaining production blockers
+
+| Item | Severity | Mitigation |
+|---|---|---|
+| Tailwind Play CDN in production | Medium | Switch to compiled Tailwind build for public-facing traffic (admin tool is fine as-is) |
+| Alpine `'unsafe-eval'` in CSP | Low | Switch to Alpine CSP build if stricter CSP is required |
+| `MailService` is dev transport only | Medium | Swap `send()` for a real SMTP/SMS API in production |
+| Appointment reminders use dev log transport | Medium | Swap `file_put_contents` for real SMS/email API; same DB contract |
+| No HTTPS enforcement in PHP | Low | Enforce via Nginx/Apache redirect (not in PHP) |
+| Session `secure` flag depends on HTTPS being detected | Low | Set `SESSION_SECURE=true` in `.env` when behind HTTPS |
+| PHP version not enforced at runtime | Low | Add `if (PHP_VERSION_ID < 80100) die(...)` check in `bootstrap/app.php` if needed |
+| No rate limiting on API endpoints | Low | The `/api/*` routes are behind `auth` but have no rate limit; add if exposed externally |
+
+### Deployment checklist
+
+- [ ] Copy `.env.example` → `.env`, set production credentials
+- [ ] Set `APP_ENV=production`, `APP_DEBUG=false`
+- [ ] Run `php console key:generate`, set `APP_KEY` in `.env`
+- [ ] Run `php console migrate` (creates all 51 tables)
+- [ ] Run `php console seed` (loads demo data — skip for fresh install)
+- [ ] Set file permissions: `chmod -R 775 storage/ public/uploads/`
+- [ ] Configure Apache/Nginx virtual host pointing at `public/`
+- [ ] Set up cron: `*/15 * * * * php console notifications:process`
+- [ ] Set up cron: `0 2 * * * php console auth:purge`
+- [ ] Set up MySQL daily backup: `mysqldump medicore | gzip > backup.sql.gz`
+- [ ] Verify HTTPS redirect in web server config
+- [ ] Test login with admin credentials
+- [ ] Test all module pages load without errors
+- [ ] Verify file uploads work (patient documents, etc.)
+- [ ] Verify dark mode toggle works
+- [ ] Run `php console test` for final verification

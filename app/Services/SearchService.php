@@ -14,8 +14,7 @@ use App\Core\Database;
 final class SearchService
 {
     private const MODULE_INDEX = [
-        ['label' => 'Billing',      'icon' => 'receipt',    'route' => null, 'table' => 'invoices'],
-        ['label' => 'Bed manager',  'icon' => 'bed-double', 'route' => null, 'table' => 'beds'],
+        // All planned modules are now live — this list is empty.
     ];
 
     /**
@@ -192,6 +191,105 @@ final class SearchService
                 }
                 $total += count($results);
                 $groups[] = ['label' => 'Departments', 'icon' => 'building-2', 'results' => $results];
+            }
+        }
+
+        // --- Invoices (live module, permission-gated) -------------------
+        if (Database::tableExists('invoices') && \App\Core\Auth::can('billing.view')) {
+            $like = '%' . $query . '%';
+            $rows = Database::query(
+                'SELECT id, invoice_code, invoice_date, total, status,
+                        CONCAT(p.first_name, " ", p.last_name) AS patient_name
+                 FROM invoices i
+                 LEFT JOIN patients p ON p.id = i.patient_id
+                 WHERE i.invoice_code LIKE ? OR p.first_name LIKE ? OR p.last_name LIKE ?
+                 ORDER BY i.invoice_date DESC LIMIT 5',
+                [$like, $like, $like]
+            );
+            if ($rows !== []) {
+                $results = [];
+                foreach ($rows as $row) {
+                    $results[] = [
+                        'title'    => "{$row['invoice_code']} · {$row['patient_name']}",
+                        'subtitle' => 'Invoice · ' . format_money($row['total'], (string) setting('currency', 'BDT')) . ' · ' . ucfirst($row['status']),
+                        'url'      => url('/admin/billing/' . (int) $row['id']),
+                    ];
+                }
+                $total += count($results);
+                $groups[] = ['label' => 'Invoices', 'icon' => 'receipt-text', 'results' => $results];
+            }
+        }
+
+        // --- Medicines (live module, permission-gated) -------------------
+        if (Database::tableExists('medicines') && \App\Core\Auth::can('pharmacy.view')) {
+            $like = '%' . $query . '%';
+            $rows = Database::query(
+                'SELECT id, name, generic_name, dosage_form FROM medicines WHERE name LIKE ? OR generic_name LIKE ? OR brand_name LIKE ? ORDER BY name LIMIT 5',
+                [$like, $like, $like]
+            );
+            if ($rows !== []) {
+                $results = [];
+                foreach ($rows as $row) {
+                    $results[] = [
+                        'title'    => $row['name'],
+                        'subtitle' => 'Medicine · ' . ($row['generic_name'] ?: ucfirst($row['dosage_form'])),
+                        'url'      => url('/admin/pharmacy/' . (int) $row['id']),
+                    ];
+                }
+                $total += count($results);
+                $groups[] = ['label' => 'Medicines', 'icon' => 'pill', 'results' => $results];
+            }
+        }
+
+        // --- Lab orders (live module, permission-gated) -------------------
+        if (Database::tableExists('lab_orders') && \App\Core\Auth::can('laboratory.view')) {
+            $like = '%' . $query . '%';
+            $rows = Database::query(
+                'SELECT o.id, o.order_code, o.status, o.created_at,
+                        CONCAT(p.first_name, " ", p.last_name) AS patient_name
+                 FROM lab_orders o
+                 LEFT JOIN patients p ON p.id = o.patient_id
+                 WHERE o.order_code LIKE ? OR p.first_name LIKE ? OR p.last_name LIKE ?
+                 ORDER BY o.created_at DESC LIMIT 5',
+                [$like, $like, $like]
+            );
+            if ($rows !== []) {
+                $results = [];
+                foreach ($rows as $row) {
+                    $results[] = [
+                        'title'    => "{$row['order_code']} · {$row['patient_name']}",
+                        'subtitle' => 'Lab · ' . ucfirst($row['status']),
+                        'url'      => url('/admin/laboratory/' . (int) $row['id']),
+                    ];
+                }
+                $total += count($results);
+                $groups[] = ['label' => 'Lab Orders', 'icon' => 'flask-conical', 'results' => $results];
+            }
+        }
+
+        // --- Admissions (live module, permission-gated) -------------------
+        if (Database::tableExists('admissions') && \App\Core\Auth::can('admissions.view')) {
+            $like = '%' . $query . '%';
+            $rows = Database::query(
+                'SELECT a.id, a.admission_code, a.status, a.admission_date,
+                        CONCAT(p.first_name, " ", p.last_name) AS patient_name
+                 FROM admissions a
+                 LEFT JOIN patients p ON p.id = a.patient_id
+                 WHERE a.admission_code LIKE ? OR p.first_name LIKE ? OR p.last_name LIKE ?
+                 ORDER BY a.admission_date DESC LIMIT 5',
+                [$like, $like, $like]
+            );
+            if ($rows !== []) {
+                $results = [];
+                foreach ($rows as $row) {
+                    $results[] = [
+                        'title'    => "{$row['admission_code']} · {$row['patient_name']}",
+                        'subtitle' => 'Admission · ' . ucfirst(str_replace('_', ' ', $row['status'])) . ' · ' . format_date(substr((string) $row['admission_date'], 0, 10), 'M j, Y'),
+                        'url'      => url('/admin/admissions/' . (int) $row['id']),
+                    ];
+                }
+                $total += count($results);
+                $groups[] = ['label' => 'Admissions', 'icon' => 'door-open', 'results' => $results];
             }
         }
 
