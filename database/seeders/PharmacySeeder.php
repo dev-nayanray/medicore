@@ -52,17 +52,17 @@ final class PharmacySeeder extends Seeder
         // Batches (some expiring, some expired, some low).
         $bInsert = $db->prepare('INSERT INTO medicine_batches (medicine_id, batch_number, expiry_date, quantity_received, quantity_remaining, cost_price, sell_price, supplier_id, received_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
         $batchData = [
-            [0, 'NAPA-2025-001', date('Y-m-d', strtotime('+18 months')), 500, 320, 2.50, 5.00, $supplierIds[0], date('Y-m-d', strtotime('-3 months'))],
-            [0, 'NAPA-2024-EXP', date('Y-m-d', strtotime('-2 months')), 200, 50, 2.00, 4.00, $supplierIds[0], date('Y-m-d', strtotime('-14 months'))],
-            [1, 'MOX-2025-003', date('Y-m-d', strtotime('+12 months')), 200, 85, 8.00, 15.00, $supplierIds[1], date('Y-m-d', strtotime('-1 month'))],
-            [2, 'SECLO-2025-004', date('Y-m-d', strtotime('+24 months')), 150, 120, 4.00, 8.00, $supplierIds[1], date('Y-m-d', strtotime('-2 months'))],
-            [3, 'GLP-2025-005', date('Y-m-d', strtotime('+6 months')), 100, 15, 3.00, 6.00, $supplierIds[2], date('Y-m-d', strtotime('-4 months'))],
-            [4, 'VENT-2025-006', date('Y-m-d', strtotime('+15 months')), 30, 12, 150.00, 250.00, $supplierIds[0], date('Y-m-d', strtotime('-1 month'))],
-            [5, 'LIP-2025-007', date('Y-m-d', strtotime('+20 months')), 100, 75, 5.00, 10.00, $supplierIds[2], date('Y-m-d', strtotime('-3 months'))],
-            [6, 'TAX-2024-EXP', date('Y-m-d', strtotime('-1 month')), 50, 10, 20.00, 35.00, $supplierIds[3], date('Y-m-d', strtotime('-13 months'))],
-            [7, 'ACI-2025-008', date('Y-m-d', strtotime('+30 months')), 200, 150, 1.50, 3.00, $supplierIds[0], date('Y-m-d', strtotime('-2 months'))],
-            [8, 'DEL-2025-009', date('Y-m-d', strtotime('+10 months')), 100, 40, 0.80, 2.00, $supplierIds[1], date('Y-m-d', strtotime('-5 months'))],
-            [9, 'NS-2025-010', date('Y-m-d', strtotime('+8 months')), 50, 8, 80.00, 150.00, $supplierIds[3], date('Y-m-d', strtotime('-3 months'))],
+            [$medIds[0], 'NAPA-2025-001', date('Y-m-d', strtotime('+18 months')), 500, 320, 2.50, 5.00, $supplierIds[0], date('Y-m-d', strtotime('-3 months'))],
+            [$medIds[0], 'NAPA-2024-EXP', date('Y-m-d', strtotime('-2 months')), 200, 50, 2.00, 4.00, $supplierIds[0], date('Y-m-d', strtotime('-14 months'))],
+            [$medIds[1], 'MOX-2025-003', date('Y-m-d', strtotime('+12 months')), 200, 85, 8.00, 15.00, $supplierIds[1], date('Y-m-d', strtotime('-1 month'))],
+            [$medIds[2], 'SECLO-2025-004', date('Y-m-d', strtotime('+24 months')), 150, 120, 4.00, 8.00, $supplierIds[1], date('Y-m-d', strtotime('-2 months'))],
+            [$medIds[3], 'GLP-2025-005', date('Y-m-d', strtotime('+6 months')), 100, 15, 3.00, 6.00, $supplierIds[2], date('Y-m-d', strtotime('-4 months'))],
+            [$medIds[4], 'VENT-2025-006', date('Y-m-d', strtotime('+15 months')), 30, 12, 150.00, 250.00, $supplierIds[0], date('Y-m-d', strtotime('-1 month'))],
+            [$medIds[5], 'LIP-2025-007', date('Y-m-d', strtotime('+20 months')), 100, 75, 5.00, 10.00, $supplierIds[2], date('Y-m-d', strtotime('-3 months'))],
+            [$medIds[6], 'TAX-2024-EXP', date('Y-m-d', strtotime('-1 month')), 50, 10, 20.00, 35.00, $supplierIds[3], date('Y-m-d', strtotime('-13 months'))],
+            [$medIds[7], 'ACI-2025-008', date('Y-m-d', strtotime('+30 months')), 200, 150, 1.50, 3.00, $supplierIds[0], date('Y-m-d', strtotime('-2 months'))],
+            [$medIds[8], 'DEL-2025-009', date('Y-m-d', strtotime('+10 months')), 100, 40, 0.80, 2.00, $supplierIds[1], date('Y-m-d', strtotime('-5 months'))],
+            [$medIds[9], 'NS-2025-010', date('Y-m-d', strtotime('+8 months')), 50, 8, 80.00, 150.00, $supplierIds[3], date('Y-m-d', strtotime('-3 months'))],
         ];
         foreach ($batchData as $b) { $bInsert->execute($b); }
 
