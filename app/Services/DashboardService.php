@@ -135,7 +135,7 @@ final class DashboardService
         }
 
         $today = (float) (Database::scalar(
-            'SELECT COALESCE(SUM(amount), 0) FROM payments WHERE DATE(paid_at) = CURDATE()'
+            "SELECT COALESCE(SUM(amount), 0) FROM payments WHERE status = 'completed' AND amount > 0 AND DATE(recorded_at) = CURDATE()"
         ) ?? 0);
 
         return [
@@ -153,7 +153,7 @@ final class DashboardService
         }
 
         $pending = (int) Database::scalar(
-            "SELECT COUNT(*) FROM invoices WHERE status IN ('unpaid', 'partial')"
+            "SELECT COUNT(*) FROM invoices WHERE balance_due > 0 AND status NOT IN ('draft','cancelled')"
         );
 
         return [
@@ -231,10 +231,11 @@ final class DashboardService
         }
 
         $rows = Database::query(
-            'SELECT DATE_FORMAT(paid_at, "%Y-%m") AS m, SUM(amount) AS total
+            'SELECT DATE_FORMAT(recorded_at, "%Y-%m") AS m, SUM(amount) AS total
              FROM payments
-             WHERE paid_at >= DATE_SUB(CURDATE(), INTERVAL 11 MONTH)
-             GROUP BY DATE_FORMAT(paid_at, "%Y-%m")'
+             WHERE status = "completed" AND amount > 0
+               AND recorded_at >= DATE_SUB(CURDATE(), INTERVAL 11 MONTH)
+             GROUP BY DATE_FORMAT(recorded_at, "%Y-%m")'
         );
 
         $byMonth = [];
@@ -267,10 +268,12 @@ final class DashboardService
             ['name' => 'Staff',           'table' => 'staff_profiles'],
             ['name' => 'Consultations',   'table' => 'consultations'],
             ['name' => 'Prescriptions',   'table' => 'prescriptions'],
+            ['name' => 'Billing',         'table' => 'invoices'],
+            ['name' => 'Services',        'table' => 'services'],
+            ['name' => 'Expenses',        'table' => 'expenses'],
             ['name' => 'Bed management',  'table' => 'beds'],
             ['name' => 'Laboratory',      'table' => 'lab_tests'],
             ['name' => 'Pharmacy',        'table' => 'medicines'],
-            ['name' => 'Billing & payments', 'table' => 'invoices'],
         ];
 
         foreach ($modules as &$module) {

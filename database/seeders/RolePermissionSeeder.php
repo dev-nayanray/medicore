@@ -25,6 +25,7 @@ final class RolePermissionSeeder extends Seeder
                 'dashboard.view', 'users.*', 'roles.view', 'settings.*', 'audit.*',
                 'patients.view', 'appointments.*', 'doctors.*', 'departments.*', 'staff.*',
                 'consultations.*', 'prescriptions.*',
+                'billing.*', 'payments.*', 'expenses.*',
                 'beds.view', 'reports.*',
             ],
             'doctor' => [
@@ -32,6 +33,7 @@ final class RolePermissionSeeder extends Seeder
                 'laboratory.update', 'laboratory.approve', 'pharmacy.view', 'reports.view',
                 'staff.view', 'departments.view',
                 'consultations.*', 'prescriptions.*',
+                'billing.view',
             ],
             'nurse' => [
                 'dashboard.view', 'patients.view', 'patients.update', 'appointments.view',
@@ -40,7 +42,8 @@ final class RolePermissionSeeder extends Seeder
             ],
             'receptionist' => [
                 'dashboard.view', 'patients.*', 'appointments.*', 'doctors.view',
-                'departments.view', 'staff.view', 'billing.view', 'billing.create', 'payments.view',
+                'departments.view', 'staff.view',
+                'billing.view', 'billing.create', 'payments.view', 'payments.create', 'expenses.view',
                 'consultations.view',
             ],
             'pharmacist' => [
@@ -51,7 +54,7 @@ final class RolePermissionSeeder extends Seeder
                 'dashboard.view', 'laboratory.*', 'departments.view',
             ],
             'accountant' => [
-                'dashboard.view', 'billing.*', 'payments.*', 'reports.view', 'reports.export',
+                'dashboard.view', 'billing.*', 'payments.*', 'expenses.*', 'reports.view', 'reports.export',
                 'staff.view', 'departments.view',
             ],
         ];

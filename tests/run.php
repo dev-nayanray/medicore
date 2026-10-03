@@ -29,17 +29,22 @@ use App\Models\Appointment;
 use App\Models\Consultation;
 use App\Models\Department;
 use App\Models\Doctor;
+use App\Models\Expense;
+use App\Models\Invoice;
 use App\Models\Patient;
+use App\Models\Payment;
 use App\Models\Prescription;
 use App\Models\Role;
 use App\Models\StaffProfile;
 use App\Models\User;
 use App\Services\AppointmentService;
 use App\Services\AuthService;
+use App\Services\BillingService;
 use App\Services\ConsultationService;
 use App\Services\DashboardService;
 use App\Services\DepartmentService;
 use App\Services\DoctorService;
+use App\Services\ExpenseService;
 use App\Services\PasswordResetService;
 use App\Services\PatientService;
 use App\Services\PrescriptionService;
@@ -1649,6 +1654,314 @@ test('Search: consultations appear in global results', static function () {
     $results = SearchService::search('CON-');
     $groups = array_column($results['groups'], null, 'label');
     expectTrue(isset($groups['Consultations']), 'consultation results should appear for "CON-"');
+});
+
+// ---------------------------------------------------------------------------
+// Phase 7 — Billing & Financial Management
+// ---------------------------------------------------------------------------
+require_once BASE_PATH . '/database/seeders/BillingSeeder.php';
+
+// Deterministic slate for phase 7 tests.
+Database::execute('DELETE FROM expenses');
+Database::execute('DELETE FROM payments');
+Database::execute('DELETE FROM invoice_items');
+Database::execute('DELETE FROM invoices');
+\Seeders\BillingSeeder::run(Database::pdo());
+
+test('Invoice: code generation is collision-safe', static function () {
+    $codes = [];
+    for ($i = 0; $i < 3; $i++) {
+        $codes[] = Invoice::nextCode();
+    }
+    expect(count(array_unique($codes)), 3, 'codes must be unique');
+    foreach ($codes as $code) {
+        expectTrue(preg_match('/^INV-\d{4}-\d{5}$/', $code) === 1, "bad code: {$code}");
+    }
+});
+
+test('Invoice: create with line items + automatic total calculation', static function () {
+    Session::start();
+    Auth::login(User::findByEmail('admin@medicore.test'));
+    $request = new Request();
+
+    $patientId = (int) Database::scalar('SELECT id FROM patients LIMIT 1');
+
+    $r = BillingService::createInvoice([
+        'patient_id' => $patientId, 'invoice_date' => date('Y-m-d'),
+        'discount_percentage' => '10', 'tax_percentage' => '5',
+    ], [
+        ['description' => 'Consultation', 'quantity' => '1', 'unit_price' => '1000', 'discount_amount' => '0'],
+        ['description' => 'CBC Test', 'quantity' => '1', 'unit_price' => '500', 'discount_amount' => '0'],
+    ], $request);
+
+    expectTrue($r['ok'], 'invoice creation should succeed');
+    $inv = Invoice::find((int) $r['id']);
+
+    // subtotal = 1000 + 500 = 1500
+    expect((float) $inv['subtotal'], 1500.00, 'subtotal should be 1500');
+    // discount = 1500 * 10% = 150
+    expect((float) $inv['discount_amount'], 150.00, 'discount should be 150');
+    // after discount = 1350
+    // tax = 1350 * 5% = 67.5
+    expect((float) $inv['tax_amount'], 67.50, 'tax should be 67.50');
+    // total = 1350 + 67.5 = 1417.5
+    expect((float) $inv['total'], 1417.50, 'total should be 1417.50');
+    expect((float) $inv['balance_due'], 1417.50, 'balance should equal total');
+    expect($inv['status'], 'draft', 'new invoice should be draft');
+
+    Database::execute('DELETE FROM invoice_items WHERE invoice_id = ?', [(int) $r['id']]);
+    Database::execute('DELETE FROM invoices WHERE id = ?', [(int) $r['id']]);
+    Auth::logout();
+});
+
+test('Payment: full payment sets invoice to paid', static function () {
+    Session::start();
+    Auth::login(User::findByEmail('admin@medicore.test'));
+    $request = new Request();
+
+    $patientId = (int) Database::scalar('SELECT id FROM patients LIMIT 1');
+
+    $r = BillingService::createInvoice([
+        'patient_id' => $patientId, 'invoice_date' => date('Y-m-d'),
+        'discount_percentage' => '0', 'tax_percentage' => '0', 'auto_send' => '1',
+    ], [
+        ['description' => 'Test service', 'quantity' => '1', 'unit_price' => '500', 'discount_amount' => '0'],
+    ], $request);
+    $invId = (int) $r['id'];
+    $inv = Invoice::find($invId);
+    $total = (float) $inv['total'];
+
+    $r2 = BillingService::recordPayment($invId, [
+        'amount' => (string) $total, 'payment_method' => 'cash',
+    ], $request);
+    expectTrue($r2['ok'], 'full payment should succeed');
+
+    $inv = Invoice::find($invId);
+    expect($inv['status'], 'paid', 'invoice should be paid');
+    expect((float) $inv['paid_amount'], $total, 'paid should equal total');
+    expect((float) $inv['balance_due'], 0.0, 'balance should be zero');
+
+    Database::execute('DELETE FROM payments WHERE invoice_id = ?', [$invId]);
+    Database::execute('DELETE FROM invoice_items WHERE invoice_id = ?', [$invId]);
+    Database::execute('DELETE FROM invoices WHERE id = ?', [$invId]);
+    Auth::logout();
+});
+
+test('Payment: partial payment keeps invoice partially_paid', static function () {
+    Session::start();
+    Auth::login(User::findByEmail('admin@medicore.test'));
+    $request = new Request();
+
+    $patientId = (int) Database::scalar('SELECT id FROM patients LIMIT 1');
+
+    $r = BillingService::createInvoice([
+        'patient_id' => $patientId, 'invoice_date' => date('Y-m-d'),
+        'discount_percentage' => '0', 'tax_percentage' => '0', 'auto_send' => '1',
+    ], [
+        ['description' => 'Expensive procedure', 'quantity' => '1', 'unit_price' => '2000', 'discount_amount' => '0'],
+    ], $request);
+    $invId = (int) $r['id'];
+
+    // Pay 800 of 2000.
+    $r2 = BillingService::recordPayment($invId, [
+        'amount' => '800', 'payment_method' => 'card', 'reference_number' => 'PARTIAL-001',
+    ], $request);
+    expectTrue($r2['ok']);
+
+    $inv = Invoice::find($invId);
+    expect($inv['status'], 'partially_paid', 'should be partially_paid');
+    expect((float) $inv['paid_amount'], 800.00);
+    expect((float) $inv['balance_due'], 1200.00);
+
+    Database::execute('DELETE FROM payments WHERE invoice_id = ?', [$invId]);
+    Database::execute('DELETE FROM invoice_items WHERE invoice_id = ?', [$invId]);
+    Database::execute('DELETE FROM invoices WHERE id = ?', [$invId]);
+    Auth::logout();
+});
+
+test('Payment: duplicate detection within 5 minutes', static function () {
+    Session::start();
+    Auth::login(User::findByEmail('admin@medicore.test'));
+    $request = new Request();
+
+    $patientId = (int) Database::scalar('SELECT id FROM patients LIMIT 1');
+    $r = BillingService::createInvoice([
+        'patient_id' => $patientId, 'invoice_date' => date('Y-m-d'),
+        'auto_send' => '1',
+    ], [['description' => 'Test', 'quantity' => '1', 'unit_price' => '300', 'discount_amount' => '0']], $request);
+    $invId = (int) $r['id'];
+
+    // First payment.
+    $r1 = BillingService::recordPayment($invId, ['amount' => '100', 'payment_method' => 'card', 'reference_number' => 'DUP-TEST-001'], $request);
+    expectTrue($r1['ok'], 'first payment should succeed');
+
+    // Duplicate (same invoice + method + amount + reference within 5 min).
+    $r2 = BillingService::recordPayment($invId, ['amount' => '100', 'payment_method' => 'card', 'reference_number' => 'DUP-TEST-001'], $request);
+    expectTrue(!$r2['ok'], 'duplicate payment should be rejected');
+    expectTrue(str_contains($r2['error'] ?? '', 'duplicate'), 'error should mention duplicate');
+
+    Database::execute('DELETE FROM payments WHERE invoice_id = ?', [$invId]);
+    Database::execute('DELETE FROM invoice_items WHERE invoice_id = ?', [$invId]);
+    Database::execute('DELETE FROM invoices WHERE id = ?', [$invId]);
+    Auth::logout();
+});
+
+test('Refund: reduces paid amount and can change status', static function () {
+    Session::start();
+    Auth::login(User::findByEmail('admin@medicore.test'));
+    $request = new Request();
+
+    $patientId = (int) Database::scalar('SELECT id FROM patients LIMIT 1');
+    $r = BillingService::createInvoice([
+        'patient_id' => $patientId, 'invoice_date' => date('Y-m-d'),
+        'auto_send' => '1',
+    ], [['description' => 'Refundable service', 'quantity' => '1', 'unit_price' => '500', 'discount_amount' => '0']], $request);
+    $invId = (int) $r['id'];
+
+    // Full payment first.
+    BillingService::recordPayment($invId, ['amount' => '500', 'payment_method' => 'cash'], $request);
+    expect(Invoice::find($invId)['status'], 'paid');
+
+    // Refund 200.
+    $r2 = BillingService::recordRefund($invId, ['amount' => '200', 'payment_method' => 'cash', 'refund_reason' => 'Partial service not rendered'], $request);
+    expectTrue($r2['ok'], 'refund should succeed');
+
+    $inv = Invoice::find($invId);
+    expect((float) $inv['paid_amount'], 300.00, 'paid should be 500-200=300');
+    expect((float) $inv['balance_due'], 200.00, 'balance should be 200');
+    expectTrue($inv['status'] === 'partially_paid' || $inv['status'] === 'refunded', 'status should reflect partial after refund');
+
+    // Cannot refund more than paid.
+    $r3 = BillingService::recordRefund($invId, ['amount' => '500', 'payment_method' => 'cash', 'refund_reason' => 'Too much'], $request);
+    expectTrue(!$r3['ok'], 'cannot refund more than paid amount');
+
+    // Refund without reason.
+    $r4 = BillingService::recordRefund($invId, ['amount' => '100', 'payment_method' => 'cash', 'refund_reason' => ''], $request);
+    expectTrue(!$r4['ok'], 'refund without reason should fail');
+
+    Database::execute('DELETE FROM payments WHERE invoice_id = ?', [$invId]);
+    Database::execute('DELETE FROM invoice_items WHERE invoice_id = ?', [$invId]);
+    Database::execute('DELETE FROM invoices WHERE id = ?', [$invId]);
+    Auth::logout();
+});
+
+test('Invoice: cancellation with reason', static function () {
+    Session::start();
+    Auth::login(User::findByEmail('admin@medicore.test'));
+    $request = new Request();
+
+    $patientId = (int) Database::scalar('SELECT id FROM patients LIMIT 1');
+    $r = BillingService::createInvoice([
+        'patient_id' => $patientId, 'invoice_date' => date('Y-m-d'),
+        'auto_send' => '1',
+    ], [['description' => 'To be cancelled', 'quantity' => '1', 'unit_price' => '300', 'discount_amount' => '0']], $request);
+    $invId = (int) $r['id'];
+
+    // Cancel without reason → should fail.
+    $r1 = BillingService::cancelInvoice($invId, '', $request);
+    expectTrue(!$r1['ok'], 'cancel without reason should fail');
+
+    // Cancel with reason.
+    $r2 = BillingService::cancelInvoice($invId, 'Patient did not proceed', $request);
+    expectTrue($r2['ok']);
+    expect(Invoice::find($invId)['status'], 'cancelled');
+
+    // Cannot cancel twice.
+    $r3 = BillingService::cancelInvoice($invId, 'Second attempt', $request);
+    expectTrue(!$r3['ok'], 'cannot cancel twice');
+
+    Database::execute('DELETE FROM invoice_items WHERE invoice_id = ?', [$invId]);
+    Database::execute('DELETE FROM invoices WHERE id = ?', [$invId]);
+    Auth::logout();
+});
+
+test('Invoice: cannot cancel a paid invoice', static function () {
+    Session::start();
+    Auth::login(User::findByEmail('admin@medicore.test'));
+    $request = new Request();
+
+    $patientId = (int) Database::scalar('SELECT id FROM patients LIMIT 1');
+    $r = BillingService::createInvoice([
+        'patient_id' => $patientId, 'invoice_date' => date('Y-m-d'),
+        'auto_send' => '1',
+    ], [['description' => 'Paid invoice', 'quantity' => '1', 'unit_price' => '300', 'discount_amount' => '0']], $request);
+    $invId = (int) $r['id'];
+
+    BillingService::recordPayment($invId, ['amount' => '300', 'payment_method' => 'cash'], $request);
+    $r2 = BillingService::cancelInvoice($invId, 'Try to cancel', $request);
+    expectTrue(!$r2['ok'], 'cannot cancel a paid invoice');
+
+    Database::execute('DELETE FROM payments WHERE invoice_id = ?', [$invId]);
+    Database::execute('DELETE FROM invoice_items WHERE invoice_id = ?', [$invId]);
+    Database::execute('DELETE FROM invoices WHERE id = ?', [$invId]);
+    Auth::logout();
+});
+
+test('Expense: create + code generation', static function () {
+    Session::start();
+    Auth::login(User::findByEmail('admin@medicore.test'));
+    $request = new Request();
+
+    $r = ExpenseService::create([
+        'category' => 'utilities', 'description' => 'Test electricity bill',
+        'amount' => '5000', 'expense_date' => date('Y-m-d'),
+        'paid_to' => 'Test Electric', 'payment_method' => 'cash',
+    ], $request);
+    expectTrue($r['ok']);
+    expectTrue(preg_match('/^EXP-\d{4}-\d{5}$/', $r['code']) === 1, 'expense code format');
+
+    $exp = Expense::find((int) $r['id']);
+    expectTrue($exp !== null);
+    expect($exp['category'], 'utilities');
+    expect((float) $exp['amount'], 5000.00);
+
+    Database::execute('DELETE FROM expenses WHERE id = ?', [(int) $r['id']]);
+    Auth::logout();
+});
+
+test('Financial stats: real data from seeded invoices', static function () {
+    $stats = Invoice::financialStats(date('Y-m-01'), date('Y-m-d'));
+    expectTrue($stats['total_invoices'] > 0, 'should have invoices this month');
+    expectTrue($stats['total_billed'] > 0, 'should have billed amount');
+    expectTrue($stats['total_collected'] >= 0, 'collected should be non-negative');
+
+    $counts = Invoice::counts();
+    expectTrue($counts['total'] > 0, 'should have non-cancelled invoices');
+});
+
+test('Access control: financial permissions', static function () {
+    Session::start();
+
+    $accountant = User::findByEmail('mahin@medicore.test');
+    Auth::login($accountant);
+    expectTrue(Auth::can('billing.view'), 'accountant can view invoices');
+    expectTrue(Auth::can('billing.create'), 'accountant can create invoices');
+    expectTrue(Auth::can('payments.create'), 'accountant can record payments');
+    expectTrue(Auth::can('payments.approve'), 'accountant can approve refunds');
+    expectTrue(Auth::can('expenses.create'), 'accountant can create expenses');
+    Auth::logout();
+
+    $receptionist = User::findByEmail('rahim@medicore.test');
+    Auth::login($receptionist);
+    expectTrue(Auth::can('billing.view'), 'receptionist can view invoices');
+    expectTrue(Auth::can('billing.create'), 'receptionist can create invoices');
+    expectTrue(Auth::can('payments.create'), 'receptionist can record payments');
+    expectTrue(!Auth::can('payments.approve'), 'receptionist cannot approve refunds');
+    expectTrue(!Auth::can('billing.delete'), 'receptionist cannot delete');
+    Auth::logout();
+
+    $nurse = User::findByEmail('farhana@medicore.test');
+    Auth::login($nurse);
+    expectTrue(!Auth::can('billing.view'), 'nurse has no billing access');
+    Auth::logout();
+});
+
+test('Dashboard: financial modules marked installed', static function () {
+    $data = DashboardService::build();
+    $modules = array_column($data['modules'], 'ready', 'name');
+    expectTrue(($modules['Billing'] ?? null) === true, 'Billing module should be installed');
+    expectTrue(($modules['Services'] ?? null) === true, 'Services module should be installed');
+    expectTrue(($modules['Expenses'] ?? null) === true, 'Expenses module should be installed');
 });
 
 // ---------------------------------------------------------------------------

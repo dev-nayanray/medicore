@@ -14,10 +14,13 @@ declare(strict_types=1);
 
 use App\Controllers\Admin\AuditLogController;
 use App\Controllers\Admin\AppointmentController;
+use App\Controllers\Admin\BillingController;
 use App\Controllers\Admin\ConsultationController;
 use App\Controllers\Admin\DepartmentController;
 use App\Controllers\Admin\DoctorController;
+use App\Controllers\Admin\ExpenseController;
 use App\Controllers\Admin\PrescriptionController;
+use App\Controllers\Admin\ServiceController;
 use App\Controllers\Admin\StaffController;
 use App\Controllers\Admin\PatientController;
 use App\Controllers\Admin\PermissionController;
@@ -335,6 +338,69 @@ $router->group(['prefix' => '/admin', 'middleware' => ['auth', 'password_current
 
     $r->get('/prescriptions/{id}/print', [PrescriptionController::class, 'print'])
         ->name('prescriptions.print')->middleware('can:prescriptions.view');
+
+    // --- Billing & Payments ----------------------------------------------
+    $r->get('/billing', [BillingController::class, 'index'])
+        ->name('billing.index')->middleware('can:billing.view');
+
+    $r->get('/billing/dashboard', [BillingController::class, 'dashboard'])
+        ->name('billing.dashboard')->middleware('can:billing.view');
+
+    $r->get('/billing/reports', [BillingController::class, 'reports'])
+        ->name('billing.reports')->middleware('can:billing.view');
+
+    $r->get('/billing/export', [BillingController::class, 'export'])
+        ->name('billing.export')->middleware('can:billing.view');
+
+    $r->get('/billing/create', [BillingController::class, 'create'])
+        ->name('billing.create')->middleware('can:billing.create');
+
+    $r->post('/billing', [BillingController::class, 'store'])
+        ->name('billing.store')->middleware('can:billing.create');
+
+    $r->get('/billing/{id}', [BillingController::class, 'show'])
+        ->name('billing.show')->middleware('can:billing.view');
+
+    $r->get('/billing/{id}/print', [BillingController::class, 'print'])
+        ->name('billing.print')->middleware('can:billing.view');
+
+    $r->post('/billing/{id}/payment', [BillingController::class, 'recordPayment'])
+        ->name('billing.payment')->middleware('can:payments.create');
+
+    $r->post('/billing/{id}/refund', [BillingController::class, 'recordRefund'])
+        ->name('billing.refund')->middleware('can:payments.approve');
+
+    $r->post('/billing/{id}/cancel', [BillingController::class, 'cancel'])
+        ->name('billing.cancel')->middleware('can:billing.update');
+
+    $r->post('/billing/{id}/notes', [BillingController::class, 'updateNotes'])
+        ->name('billing.notes')->middleware('can:billing.update');
+
+    // --- Hospital Services -----------------------------------------------
+    $r->get('/services', [ServiceController::class, 'index'])
+        ->name('services.index')->middleware('can:billing.view');
+
+    $r->post('/services', [ServiceController::class, 'store'])
+        ->name('services.store')->middleware('can:billing.update');
+
+    $r->post('/services/{id}', [ServiceController::class, 'update'])
+        ->name('services.update')->middleware('can:billing.update');
+
+    $r->post('/services/{id}/delete', [ServiceController::class, 'destroy'])
+        ->name('services.delete')->middleware('can:billing.delete');
+
+    // --- Expenses ---------------------------------------------------------
+    $r->get('/expenses', [ExpenseController::class, 'index'])
+        ->name('expenses.index')->middleware('can:expenses.view');
+
+    $r->post('/expenses', [ExpenseController::class, 'store'])
+        ->name('expenses.store')->middleware('can:expenses.create');
+
+    $r->post('/expenses/{id}', [ExpenseController::class, 'update'])
+        ->name('expenses.update')->middleware('can:expenses.update');
+
+    $r->post('/expenses/{id}/delete', [ExpenseController::class, 'destroy'])
+        ->name('expenses.delete')->middleware('can:expenses.delete');
 
     // --- Roles & permissions ---------------------------------------------
     $r->get('/roles', [RoleController::class, 'index'])

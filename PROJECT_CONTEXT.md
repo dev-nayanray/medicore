@@ -1,7 +1,7 @@
 # PROJECT_CONTEXT — MediCore HMS
 
 > **Purpose:** the durable architecture contract for every future phase.
-> Read this before adding any module. Last updated: Phase 6 (consultations & prescriptions).
+> Read this before adding any module. Last updated: Phase 7 (billing & financial management).
 
 ---
 
@@ -175,10 +175,10 @@ backing table exists (`DashboardService::moduleStatus()` + stat guards):
 | ~~Staff~~ | `staff_profiles`, `staff_shifts`, `staff_attendance`, `staff_leaves` | staff.view/create/update/delete | ✅ Phase 4 |
 | ~~Appointments~~ | `appointments`, `appointment_reminders` | appointments.view/create/update/delete/approve | ✅ Phase 5 |
 | ~~Consultations~~ | `consultations`, `prescriptions`, `prescription_items`, `consultation_attachments`, `consultation_amendments` | consultations.view/create/update/finalize/amend, prescriptions.view/create/update/finalize | ✅ Phase 6 |
+| ~~Billing~~ | `invoices`, `invoice_items`, `payments`, `services`, `expenses` | billing.view/create/update/delete/approve, payments.view/create/approve, expenses.view/create/update/delete | ✅ Phase 7 |
 | Bed management | `beds` | beds.view/update | ⏳ |
 | Laboratory | `lab_tests` | laboratory.* (incl. approve) | ⏳ |
 | Pharmacy | `medicines` | pharmacy.* | ⏳ |
-| Billing & payments | `invoices`, `payments` | billing.*, payments.* (incl. approve) | ⏳ |
 | Reports | — | reports.view/export | ⏳ |
 
 ---
@@ -289,7 +289,7 @@ public/index.php (sole web entry point)
 8. Add audit logging to every write action.
 9. Extend `tests/run.php` with module tests; run `php console test`.
 
-## 7. Known limitations (accepted through phase 6)
+## 7. Known limitations (accepted through phase 7)
 
 - Deactivating/archiving a user does not kill their live session instantly;
   it lands on the next 5-minute snapshot re-sync or their next request after
@@ -516,3 +516,68 @@ public/index.php (sole web entry point)
   appointment detail page yet. The `appointment_id` on consultations
   is the authoritative link; the appointment show view can be extended
   to display the linked consultation when that integration is needed.
+
+### ✅ Phase 7 — Billing & Financial Management (COMPLETE, verified 2026-10-04)
+
+| Area | State |
+|---|---|
+| Configurable hospital services catalogue (6 categories, 40 seeded services with pricing) | ✅ Live |
+| Generate invoices with dynamic line items linked to patients + services | ✅ Live |
+| Automatic subtotal, discount (%), tax (%), and total calculations — all DECIMAL | ✅ Live |
+| Full and partial payment handling with outstanding balance tracking | ✅ Live |
+| 6 payment methods (cash, card, mobile_banking, bank_transfer, insurance, other) | ✅ Live |
+| Duplicate payment prevention (transaction + row lock + 5-min duplicate detection) | ✅ Live |
+| Refunds with authorization (payments.approve gate) — negative payments, status transition | ✅ Live |
+| Invoice cancellation with reason (draft/sent/partial only — paid requires refund first) | ✅ Live |
+| Unique invoice (INV-YYYY-NNNNN), payment (PAY-YYYY-NNNNN), expense (EXP-YYYY-NNNNN) codes | ✅ Live |
+| Printable invoice (standalone HTML, hospital branding, auto-print dialog → Save as PDF) | ✅ Live |
+| Expense management (7 categories, CRUD, code generation) | ✅ Live |
+| Revenue & payment dashboard (KPI tiles, 12-month revenue chart, payment method breakdown, daily collection chart) | ✅ Live |
+| Financial reports (daily/weekly/monthly/custom-range — P&L, expense breakdown, method breakdown) | ✅ Live |
+| Invoice directory with advanced filters (search/status/date range) + CSV export | ✅ Live |
+| Audit coverage: invoice created/cancelled/printed/exported, payment recorded/refunded, expense created/updated/deleted | ✅ Live |
+| Role-based access: billing.view/create/update/delete, payments.view/create/approve, expenses.view/create/update/delete | ✅ Live |
+| Dashboard integration: revenue stat tile + pending bills tile live, monthly revenue chart, quick-action buttons | ✅ Live |
+| Sidebar Finance section (Billing & Invoices, Services & Pricing, Expenses) | ✅ Live |
+| Test suite: 10 new assertions covering invoice calc, full/partial payment, duplicate detection, refund, cancel, expense, stats, access control, dashboard registry | ✅ Live |
+
+**Key mechanics to preserve:**
+
+- **Monetary precision:** all monetary columns use `DECIMAL(12,2)` for amounts
+  and `DECIMAL(5,2)` for percentages. PHP `round()` with 2 decimal places is
+  used for all calculations. Never use `FLOAT` for money — it introduces
+  rounding errors.
+- **Invoice calculation formula:** `line_total = (quantity * unit_price) -
+  item_discount`; `subtotal = SUM(line_total)`; `discount_amount = subtotal *
+  (discount_percentage / 100)`; `after_discount = subtotal - discount_amount`;
+  `tax_amount = after_discount * (tax_percentage / 100)`; `total =
+  after_discount + tax_amount`. All rounded to 2 decimal places.
+- **Payment recording (`BillingService::recordPayment`):** runs inside a
+  `beginTransaction` / `commit` block. Before inserting the payment,
+  `SELECT * FROM invoices WHERE id = ? FOR UPDATE` locks the invoice row.
+  Then a duplicate check: same invoice + method + amount + reference within
+  5 minutes. If the payment exceeds the balance, it's rejected. After
+  insert, `Invoice::recalculate()` updates `paid_amount`, `balance_due`,
+  and `status` (sent → partially_paid → paid).
+- **Refund recording (`BillingService::recordRefund`):** same transaction +
+  lock pattern. Creates a payment with negative `amount` and `is_refund = 1`.
+  Requires a reason (min 5 chars). Cannot refund more than `paid_amount`.
+  After insert, `Invoice::recalculate()` is called, and if `paid_amount`
+  drops to 0 (and there was ever a payment), status becomes `refunded`.
+  Requires `payments.approve` permission — only accountants and admins.
+- **Invoice cancellation:** only `draft`/`sent`/`partially_paid` invoices
+  can be cancelled (paid invoices must be refunded first). A reason is
+  required. Pending payments are voided. The `cancelled_at`/`cancelled_by`
+  /`cancellation_reason` fields are stamped.
+- **`Invoice::recalculate()`:** recomputes `paid_amount` from the payments
+  table (`SUM(amount) WHERE status = 'completed'`), then derives
+  `balance_due = total - paid_amount`, and sets `status` based on the
+  ratio: `paid <= 0 → sent`, `paid >= total → paid`, `0 < paid < total →
+  partially_paid`. Called after every payment/refund inside the
+  transaction.
+- **Services catalogue:** the `services` table has a `category` enum
+  (consultation, laboratory, procedure, medicine, admission, other) and
+  `is_active` flag. Services are soft-deactivated (not hard-deleted) to
+  preserve invoice item references. The `medicine_name` on prescriptions
+  is free-text — when the pharmacy module ships, services can be
+  cross-referenced.

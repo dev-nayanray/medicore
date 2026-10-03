@@ -59,17 +59,18 @@ $user = auth_user();
                 <i data-lucide="id-card" class="h-4 w-4"></i><span class="hidden sm:inline">Staff</span>
             </a>
         <?php endif; ?>
+        <?php if (can('billing.view')): ?>
+            <a href="<?= url('/admin/billing/dashboard') ?>" class="btn btn-secondary">
+                <i data-lucide="banknote" class="h-4 w-4"></i><span class="hidden sm:inline">Finance</span>
+            </a>
+        <?php endif; ?>
         <?php if (can('appointments.view')): ?>
             <a href="<?= url('/admin/appointments') ?>" class="btn btn-primary">
                 <i data-lucide="calendar-days" class="h-4 w-4"></i><span class="hidden sm:inline">Appointments</span>
             </a>
-        <?php elseif (can('patients.view')): ?>
-            <a href="<?= url('/admin/patients') ?>" class="btn btn-primary">
-                <i data-lucide="users" class="h-4 w-4"></i><span class="hidden sm:inline">Patient directory</span>
-            </a>
-        <?php elseif (can('departments.view')): ?>
-            <a href="<?= url('/admin/departments') ?>" class="btn btn-primary">
-                <i data-lucide="building-2" class="h-4 w-4"></i><span class="hidden sm:inline">Departments</span>
+        <?php elseif (can('billing.view')): ?>
+            <a href="<?= url('/admin/billing') ?>" class="btn btn-primary">
+                <i data-lucide="receipt-text" class="h-4 w-4"></i><span class="hidden sm:inline">Invoices</span>
             </a>
         <?php else: ?>
             <a href="<?= url('/admin/users') ?>" class="btn btn-primary">

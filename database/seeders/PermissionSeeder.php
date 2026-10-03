@@ -39,6 +39,7 @@ final class PermissionSeeder extends Seeder
             'pharmacy'    => ['view', 'create', 'update'],
             'billing'     => ['view', 'create', 'update', 'delete', 'approve'],
             'payments'    => ['view', 'create', 'approve'],
+            'expenses'    => ['view', 'create', 'update', 'delete'],
             'reports'     => ['view', 'export'],
         ];
 

@@ -53,9 +53,10 @@ $menu = [
     ],
     [
         'label' => 'Finance', 'items' => [
-            ['key' => 'billing', 'label' => 'Billing & Invoices', 'href' => '#', 'icon' => 'receipt-text', 'can' => null, 'soon' => true],
-            ['key' => 'payments','label' => 'Payments',           'href' => '#', 'icon' => 'credit-card',  'can' => null, 'soon' => true],
-            ['key' => 'reports', 'label' => 'Reports',            'href' => '#', 'icon' => 'chart-pie',    'can' => null, 'soon' => true],
+            ['key' => 'billing',  'label' => 'Billing & Invoices', 'href' => url('/admin/billing'), 'icon' => 'receipt-text', 'can' => 'billing.view', 'soon' => false],
+            ['key' => 'services', 'label' => 'Services & Pricing',  'href' => url('/admin/services'), 'icon' => 'tag',          'can' => 'billing.view', 'soon' => false],
+            ['key' => 'expenses', 'label' => 'Expenses',             'href' => url('/admin/expenses'), 'icon' => 'trending-down', 'can' => 'expenses.view', 'soon' => false],
+            ['key' => 'reports', 'label' => 'Reports',              'href' => '#', 'icon' => 'chart-pie',    'can' => null, 'soon' => true],
         ],
     ],
     [
