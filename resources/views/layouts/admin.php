@@ -437,8 +437,20 @@ tailwind.config = {
 window.__flashes = <?= json_encode($flashes, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 </script>
 
+<!--
+   Script order matters: app.js registers its `alpine:init` listener at the
+   top level. Alpine's CDN build auto-starts via queueMicrotask() at the end
+   of its own script, which fires `alpine:init` BEFORE the next deferred
+   script runs. If Alpine loads first, the event fires before app.js can
+   register the listener — components (layout, toasts, confirmDialog, …)
+   never get registered and every @click / x-show silently breaks.
+
+   Loading app.js BEFORE Alpine guarantees the listener is in place when
+   Alpine fires the event. Both are `defer`d so they still execute after
+   HTML parsing, preserving the non-blocking behaviour.
+-->
+<script src="<?= asset('js/app.js') ?>" defer></script>
 <script src="<?= asset('vendor/alpine/alpine.min.js') ?>" defer></script>
 <script src="<?= asset('vendor/lucide/lucide.min.js') ?>"></script>
-<script src="<?= asset('js/app.js') ?>" defer></script>
 </body>
 </html>
