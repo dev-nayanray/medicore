@@ -1,7 +1,7 @@
 # PROJECT_CONTEXT — MediCore HMS
 
 > **Purpose:** the durable architecture contract for every future phase.
-> Read this before adding any module. Last updated: Phase 2 (auth & access control).
+> Read this before adding any module. Last updated: Phase 3 (patient management).
 
 ---
 
@@ -46,22 +46,73 @@ with real stats + honest empty states, 32-assertion test suite.
 - **Deactivated vs archived:** both block sign-in at the door; archived additionally
   hides the account from default lists and is reversible via restore.
 
+### ✅ Phase 3 — Patient Management (COMPLETE, verified 2026-10-03)
+
+| Area | State |
+|---|---|
+| Patient registration with auto-generated unique IDs (MCP-YYYY-NNNNN) | ✅ Live |
+| Full CRUD: create / edit / view / archive / restore + confirm dialogs | ✅ Live |
+| Multi-section form: personal, contact, emergency, clinical, optional first document | ✅ Live |
+| Server-side validation (required, unique NID, email, enum, length rules) | ✅ Live |
+| Patient directory: search, gender/blood/status filters, sortable columns, pagination | ✅ Live |
+| CSV export (respects active filters) | ✅ Live |
+| Duplicate detection: live AJAX check + server-side gate (phone / NID / name+DOB) | ✅ Live |
+| Patient documents: secure upload (extension + finfo MIME sniff), private storage, gated download | ✅ Live |
+| Encounter timeline: record visits (type, doctor, complaint, diagnosis, notes, status) | ✅ Live |
+| Tabbed profile: overview, visits (timeline), documents, prescriptions/lab-reports/invoices (empty states) | ✅ Live |
+| Printable patient summary (standalone print layout, hospital header, allergy banner) | ✅ Live |
+| Archive preserves visits, documents and audit history (soft `archived_at` timestamp) | ✅ Live |
+| Audit coverage: created / updated / archived / restored / visit recorded / document uploaded / downloaded / deleted / exported / summary printed | ✅ Live |
+| Role-based access: `patients.view / create / update` gates on every route; medical info visible to clinical roles only | ✅ Live |
+| Dashboard integration: patients stat tile live, sidebar link, quick-action buttons, global search returns patient results | ✅ Live |
+| Responsive tables + mobile-friendly forms + empty states + toast notifications | ✅ Live |
+| Test suite: 50+ assertions covering code generation, CRUD lifecycle, duplicate detection, directory filters/sort/pagination, CSV export, document upload validation, access control | ✅ Live |
+
+**Key mechanics to preserve:**
+
+- **Patient ID generation (`Patient::nextCode`):** reads `MAX(sequence)` for the
+  current year, increments, collision-checks, retries up to 5 times. Final
+  fallback is a time-based suffix. Never trust client input for the code.
+- **Duplicate detection (`Patient::findPossibleDuplicates`):** matches on
+  exact national_id, normalized phone (spaces/hyphens stripped), or
+  case-insensitive first+last name + date_of_birth. Archived patients are
+  excluded from duplicate candidates. The AJAX endpoint (`POST /api/patients/duplicates`)
+  requires `patients.create` OR `patients.update`; the server-side gate in
+  `PatientController::store/update` blocks the save unless `confirm_dupes=1`.
+- **Document pipeline (`PatientService::storeDocument`):** files live OUTSIDE
+  the docroot at `storage/uploads/patients/` with random 40-hex names — the
+  original filename is stored only for display. Validation layers: PHP upload
+  error code, size cap (5 MB), extension whitelist (pdf/jpg/jpeg/png/webp),
+  finfo MIME sniffing (extension and content must agree). Downloads stream
+  through `PatientController::downloadDocument` with `X-Content-Type-Options:
+  nosniff` and `Content-Disposition: inline`. The `move_uploaded_file` call
+  falls back to `copy()` for CLI/test contexts where `is_uploaded_file()` is
+  false.
+- **Archive is soft:** `archived_at` timestamp only. Visits, documents and
+  audit history are never deleted on archive; the profile stays viewable
+  (read-only) and the patient can be restored. The directory hides archived
+  patients by default (`status=not_archived`) but the filter exposes them.
+- **Doctor references on visits:** `PatientService::addVisit` validates the
+  `doctor_id` against active users with a doctor/administrator/super-admin
+  role; invalid references are silently dropped (not stored) to prevent
+  dangling FKs when staff are later archived.
+
 ### ⏳ Planned modules (each = one future phase)
 
 Modules light up on the dashboard/sidebar **automatically** when their
 backing table exists (`DashboardService::moduleStatus()` + stat guards):
 
-| Module | Backing table(s) | Permissions already seeded |
-|---|---|---|
-| Patients | `patients` | patients.view/create/update/delete |
-| Appointments | `appointments` | appointments.* (incl. approve) |
-| Doctors | `doctors` | doctors.* |
-| Departments | `departments` | departments.* |
-| Bed management | `beds` | beds.view/update |
-| Laboratory | `lab_tests` | laboratory.* (incl. approve) |
-| Pharmacy | `medicines` | pharmacy.* |
-| Billing & payments | `invoices`, `payments` | billing.*, payments.* (incl. approve) |
-| Reports | — | reports.view/export |
+| Module | Backing table(s) | Permissions already seeded | State |
+|---|---|---|---|
+| ~~Patients~~ | `patients`, `patient_visits`, `patient_documents` | patients.view/create/update/delete | ✅ Phase 3 |
+| Appointments | `appointments` | appointments.* (incl. approve) | ⏳ |
+| Doctors | `doctors` | doctors.* | ⏳ |
+| Departments | `departments` | departments.* | ⏳ |
+| Bed management | `beds` | beds.view/update | ⏳ |
+| Laboratory | `lab_tests` | laboratory.* (incl. approve) | ⏳ |
+| Pharmacy | `medicines` | pharmacy.* | ⏳ |
+| Billing & payments | `invoices`, `payments` | billing.*, payments.* (incl. approve) | ⏳ |
+| Reports | — | reports.view/export | ⏳ |
 
 ---
 
@@ -116,8 +167,13 @@ public/index.php (sole web entry point)
    settings changes, password events, role changes.
 6. New admin routes go under the `/admin` prefix group (auth +
    password_current middleware).
-7. File uploads (future) must target `public/uploads`, validated by type/size,
-   random names — never trust the original filename.
+7. File uploads target `storage/uploads/<module>/` (OUTSIDE the docroot),
+   validated by extension whitelist + `finfo` MIME sniffing + size cap,
+   stored under random server-generated names — the original filename is
+   kept only for display. Downloads stream through a permission-gated
+   controller with `nosniff` + `Content-Disposition: inline`, never as
+   public URLs. See `PatientService::storeDocument` for the reference
+   implementation.
 8. **Authentication flows go through `AuthService` / `PasswordResetService`**
    — never verify passwords ad-hoc in controllers. New failure reasons go
    into `login_attempts.failure_reason` for the history UI.
@@ -166,7 +222,7 @@ public/index.php (sole web entry point)
 8. Add audit logging to every write action.
 9. Extend `tests/run.php` with module tests; run `php console test`.
 
-## 7. Known limitations (accepted for phase 2)
+## 7. Known limitations (accepted through phase 3)
 
 - Deactivating/archiving a user does not kill their live session instantly;
   it lands on the next 5-minute snapshot re-sync or their next request after
@@ -182,3 +238,16 @@ public/index.php (sole web entry point)
   Scheduler) to prune old login attempts and consumed reset tokens.
 - CSP allows `'unsafe-eval'` (Alpine standard build). Switching to Alpine's
   CSP build would tighten this when required.
+- Patient documents are stored on the local filesystem under
+  `storage/uploads/patients/`. For multi-server deployments, swap the
+  `PatientService` file operations for an S3-compatible adapter — the DB
+  schema and download controller stay unchanged.
+- Patient prescriptions, lab reports and invoices tabs render honest empty
+  states today; they fill automatically once the corresponding modules ship
+  (laboratory, pharmacy, billing).
+- Duplicate detection is intentional/assisted, not blocking — staff can
+  override with `confirm_dupes=1`. A future hard-block policy could be added
+  per role if a stricter workflow is required.
+- The encounter timeline records visits created through the profile form.
+  Integration with an appointments module (auto-creating a visit when an
+  appointment is completed) is deferred to the appointments phase.

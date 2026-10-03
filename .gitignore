@@ -3,6 +3,11 @@
 !/storage/logs/.gitkeep
 /storage/cache/*
 !/storage/cache/.gitkeep
+/storage/uploads/*
+!/storage/uploads/.gitkeep
+!/storage/uploads/patients/
+/storage/uploads/patients/*
+!/storage/uploads/patients/.gitkeep
 public/uploads/*
 !public/uploads/.gitkeep
 .phpunit.result.cache

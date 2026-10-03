@@ -43,7 +43,7 @@ final class PatientController extends Controller
             'counts'      => $counts,
             'bloodGroups' => self::BLOOD_GROUPS,
             'baseUrl'     => url('/admin/patients') . '?' . http_build_query(array_filter([
-                'search' => $filters['search'], 'gender' => $filters['gender'],
+                'q' => $filters['search'], 'gender' => $filters['gender'],
                 'blood_group' => $filters['blood_group'], 'status' => $filters['status'],
                 'sort' => $filters['sort'], 'dir' => $filters['dir'],
             ], static fn ($v) => $v !== '' && $v !== null)) . '&',
