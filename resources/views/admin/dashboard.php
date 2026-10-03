@@ -29,9 +29,16 @@ $user = auth_user();
     </div>
 
     <div class="flex flex-wrap items-center gap-2">
-        <button type="button" class="btn btn-secondary" @click="soon('New appointment')">
-            <i data-lucide="calendar-plus" class="h-4 w-4"></i><span class="hidden sm:inline">New appointment</span>
-        </button>
+        <?php if (can('appointments.create')): ?>
+            <a href="<?= url('/admin/appointments/create') ?>" class="btn btn-secondary">
+                <i data-lucide="calendar-plus" class="h-4 w-4"></i><span class="hidden sm:inline">New appointment</span>
+            </a>
+        <?php endif; ?>
+        <?php if (can('appointments.view')): ?>
+            <a href="<?= url('/admin/appointments/queue') ?>" class="btn btn-secondary">
+                <i data-lucide="list-checks" class="h-4 w-4"></i><span class="hidden sm:inline">Live queue</span>
+            </a>
+        <?php endif; ?>
         <?php if (can('patients.create')): ?>
             <a href="<?= url('/admin/patients/create') ?>" class="btn btn-secondary">
                 <i data-lucide="user-plus" class="h-4 w-4"></i><span class="hidden sm:inline">Register patient</span>
@@ -47,7 +54,11 @@ $user = auth_user();
                 <i data-lucide="id-card" class="h-4 w-4"></i><span class="hidden sm:inline">Staff</span>
             </a>
         <?php endif; ?>
-        <?php if (can('patients.view')): ?>
+        <?php if (can('appointments.view')): ?>
+            <a href="<?= url('/admin/appointments') ?>" class="btn btn-primary">
+                <i data-lucide="calendar-days" class="h-4 w-4"></i><span class="hidden sm:inline">Appointments</span>
+            </a>
+        <?php elseif (can('patients.view')): ?>
             <a href="<?= url('/admin/patients') ?>" class="btn btn-primary">
                 <i data-lucide="users" class="h-4 w-4"></i><span class="hidden sm:inline">Patient directory</span>
             </a>

@@ -25,12 +25,14 @@ use App\Core\Router;
 use App\Core\Session;
 use App\Core\Validator;
 use App\Core\View;
+use App\Models\Appointment;
 use App\Models\Department;
 use App\Models\Doctor;
 use App\Models\Patient;
 use App\Models\Role;
 use App\Models\StaffProfile;
 use App\Models\User;
+use App\Services\AppointmentService;
 use App\Services\AuthService;
 use App\Services\DashboardService;
 use App\Services\DepartmentService;
@@ -1151,6 +1153,257 @@ test('Search: doctors, staff and departments appear in global results', static f
     $results = SearchService::search('Cardio');
     $groups = array_column($results['groups'], null, 'label');
     expectTrue(isset($groups['Departments']), 'department results should appear for "Cardio"');
+});
+
+// ---------------------------------------------------------------------------
+// Phase 5 — Appointment & Queue Management
+// ---------------------------------------------------------------------------
+require_once BASE_PATH . '/database/seeders/AppointmentSeeder.php';
+
+// Deterministic slate for phase 5 tests.
+Database::execute('DELETE FROM appointment_reminders');
+Database::execute('DELETE FROM appointments');
+\Seeders\AppointmentSeeder::run(Database::pdo());
+
+test('Appointment: unique sequential codes are generated', static function () {
+    $codes = [];
+    for ($i = 0; $i < 3; $i++) {
+        $codes[] = Appointment::nextCode();
+    }
+    expect(count(array_unique($codes)), 3, 'codes must be unique');
+    foreach ($codes as $code) {
+        expectTrue(preg_match('/^APT-\d{4}-\d{5}$/', $code) === 1, "bad code format: {$code}");
+    }
+});
+
+test('Appointment: booking lifecycle with overlap prevention', static function () {
+    Session::start();
+    Auth::login(User::findByEmail('admin@medicore.test'));
+    $request = new Request();
+
+    // Resolve a patient + doctor.
+    $patientId = (int) Database::scalar('SELECT id FROM patients LIMIT 1');
+    $doctorId = (int) Database::scalar("SELECT id FROM doctors WHERE status = 'active' LIMIT 1");
+    expectTrue($patientId > 0 && $doctorId > 0, 'need at least one patient and one active doctor');
+
+    $date = date('Y-m-d', strtotime('+30 days'));
+
+    // First booking: 10:00–10:30.
+    $r1 = AppointmentService::book([
+        'patient_id' => $patientId, 'doctor_id' => $doctorId,
+        'appointment_date' => $date, 'start_time' => '10:00', 'end_time' => '10:30',
+        'appointment_type' => 'scheduled', 'reason' => 'Test consultation',
+    ], $request);
+    expectTrue($r1['ok']);
+    $id1 = (int) $r1['id'];
+
+    // Overlapping booking: 10:15–10:45 — must be rejected.
+    $r2 = AppointmentService::book([
+        'patient_id' => $patientId, 'doctor_id' => $doctorId,
+        'appointment_date' => $date, 'start_time' => '10:15', 'end_time' => '10:45',
+        'appointment_type' => 'scheduled', 'reason' => 'Overlap attempt',
+    ], $request);
+    expectTrue(!$r2['ok'], 'overlap must be rejected');
+
+    // Adjacent booking: 10:30–11:00 — allowed (boundary touch).
+    $r3 = AppointmentService::book([
+        'patient_id' => $patientId, 'doctor_id' => $doctorId,
+        'appointment_date' => $date, 'start_time' => '10:30', 'end_time' => '11:00',
+        'appointment_type' => 'scheduled', 'reason' => 'Adjacent slot',
+    ], $request);
+    expectTrue($r3['ok'], 'adjacent slot touching the boundary is allowed');
+
+    // End-before-start is invalid.
+    $r4 = AppointmentService::book([
+        'patient_id' => $patientId, 'doctor_id' => $doctorId,
+        'appointment_date' => $date, 'start_time' => '14:00', 'end_time' => '13:00',
+        'appointment_type' => 'scheduled', 'reason' => 'Bad times',
+    ], $request);
+    expectTrue(!$r4['ok'], 'end-before-start must be rejected');
+
+    // Cleanup.
+    $id1clean = $id1;
+    $id3clean = (int) $r3['id'];
+    Database::execute('DELETE FROM appointment_reminders WHERE appointment_id IN (?, ?)', [$id1clean, $id3clean]);
+    Database::execute('DELETE FROM appointments WHERE id IN (?, ?)', [$id1clean, $id3clean]);
+    Auth::logout();
+});
+
+test('Appointment: walk-in gets queue token + checked_in status', static function () {
+    Session::start();
+    Auth::login(User::findByEmail('admin@medicore.test'));
+    $request = new Request();
+
+    $patientId = (int) Database::scalar('SELECT id FROM patients LIMIT 1');
+    $doctorId = (int) Database::scalar("SELECT id FROM doctors WHERE status = 'active' LIMIT 1");
+    $date = date('Y-m-d', strtotime('+5 days'));
+
+    $r = AppointmentService::book([
+        'patient_id' => $patientId, 'doctor_id' => $doctorId,
+        'appointment_date' => $date, 'start_time' => '15:00', 'end_time' => '15:30',
+        'appointment_type' => 'walk_in', 'reason' => 'Walk-in test',
+    ], $request);
+    expectTrue($r['ok'], 'walk-in booking must succeed');
+    expectTrue(!empty($r['queue_token']), 'walk-in must get a queue token immediately');
+
+    $apt = Appointment::find((int) $r['id']);
+    expectTrue($apt['status'] === 'checked_in', 'walk-in should be checked_in immediately');
+    expectTrue($apt['checked_in_at'] !== null, 'checked_in_at should be stamped');
+
+    $rid = (int) $r['id'];
+    Database::execute('DELETE FROM appointment_reminders WHERE appointment_id = ?', [$rid]);
+    Database::execute('DELETE FROM appointments WHERE id = ?', [$rid]);
+    Auth::logout();
+});
+
+test('Appointment: status transitions follow the lifecycle map', static function () {
+    Session::start();
+    Auth::login(User::findByEmail('admin@medicore.test'));
+    $request = new Request();
+
+    $patientId = (int) Database::scalar('SELECT id FROM patients LIMIT 1');
+    $doctorId = (int) Database::scalar("SELECT id FROM doctors WHERE status = 'active' LIMIT 1");
+    $date = date('Y-m-d', strtotime('+20 days'));
+
+    // Book → pending.
+    $r = AppointmentService::book([
+        'patient_id' => $patientId, 'doctor_id' => $doctorId,
+        'appointment_date' => $date, 'start_time' => '11:00', 'end_time' => '11:30',
+        'appointment_type' => 'scheduled', 'reason' => 'Lifecycle test',
+    ], $request);
+    $id = (int) $r['id'];
+
+    // pending → confirmed.
+    expectTrue(AppointmentService::transition($id, 'confirmed', $request)['ok']);
+
+    // confirmed → checked_in (assigns queue token).
+    expectTrue(AppointmentService::transition($id, 'checked_in', $request)['ok']);
+    $apt = Appointment::find($id);
+    expectTrue($apt['queue_token'] !== null, 'check-in should assign a queue token');
+    expectTrue($apt['checked_in_at'] !== null);
+
+    // checked_in → in_consultation.
+    expectTrue(AppointmentService::transition($id, 'in_consultation', $request)['ok']);
+    expectTrue(Appointment::find($id)['consultation_started_at'] !== null);
+
+    // in_consultation → completed.
+    expectTrue(AppointmentService::transition($id, 'completed', $request)['ok']);
+    expectTrue(Appointment::find($id)['completed_at'] !== null);
+
+    // completed is terminal — cannot transition.
+    expectTrue(!AppointmentService::transition($id, 'checked_in', $request)['ok'], 'completed is terminal');
+
+    Database::execute('DELETE FROM appointment_reminders WHERE appointment_id = ?', [$id]);
+    Database::execute('DELETE FROM appointments WHERE id = ?', [$id]);
+    Auth::logout();
+});
+
+test('Appointment: cancel with reason blocks further transitions', static function () {
+    Session::start();
+    Auth::login(User::findByEmail('admin@medicore.test'));
+    $request = new Request();
+
+    $patientId = (int) Database::scalar('SELECT id FROM patients LIMIT 1');
+    $doctorId = (int) Database::scalar("SELECT id FROM doctors WHERE status = 'active' LIMIT 1");
+    $date = date('Y-m-d', strtotime('+25 days'));
+
+    $r = AppointmentService::book([
+        'patient_id' => $patientId, 'doctor_id' => $doctorId,
+        'appointment_date' => $date, 'start_time' => '12:00', 'end_time' => '12:30',
+        'appointment_type' => 'scheduled', 'reason' => 'Cancel test',
+    ], $request);
+    $id = (int) $r['id'];
+
+    $r2 = AppointmentService::cancel($id, 'Patient unavailable', $request);
+    expectTrue($r2['ok']);
+    $apt = Appointment::find($id);
+    expectTrue($apt['status'] === 'cancelled');
+    expectTrue($apt['cancellation_reason'] === 'Patient unavailable');
+    expectTrue($apt['cancelled_by'] !== null);
+
+    // Cannot transition from cancelled.
+    expectTrue(!AppointmentService::transition($id, 'checked_in', $request)['ok'], 'cancelled is terminal');
+
+    Database::execute('DELETE FROM appointment_reminders WHERE appointment_id = ?', [$id]);
+    Database::execute('DELETE FROM appointments WHERE id = ?', [$id]);
+    Auth::logout();
+});
+
+test('Appointment: queue token is per-day sequential', static function () {
+    $date = date('Y-m-d');
+    $t1 = Appointment::nextQueueToken($date, null);
+    $t2 = Appointment::nextQueueToken($date, null);
+    // The format is Q-NNN; t2 should be >= t1 (may be equal if no inserts between calls).
+    expectTrue(str_starts_with($t1, 'Q-') && str_starts_with($t2, 'Q-'), 'queue token format is Q-NNN');
+    $n1 = (int) substr($t1, 2);
+    $n2 = (int) substr($t2, 2);
+    expectTrue($n2 >= $n1, 'next token should not be less than the previous');
+});
+
+test('Appointment: directory filters by status and date', static function () {
+    $today = date('Y-m-d');
+    $todayList = Appointment::directory(['date_from' => $today, 'date_to' => $today, 'status' => '', 'sort' => 'appointment_date', 'dir' => 'asc'], 1, 1000);
+    expectTrue($todayList['total'] > 0, 'should have appointments today');
+
+    $completed = Appointment::directory(['date_from' => $today, 'date_to' => $today, 'status' => 'completed'], 1, 1000);
+    foreach ($completed['rows'] as $row) {
+        expect($row['status'], 'completed');
+    }
+
+    $cancelled = Appointment::directory(['status' => 'cancelled'], 1, 1000);
+    foreach ($cancelled['rows'] as $row) {
+        expect($row['status'], 'cancelled');
+    }
+});
+
+test('Appointment: no-show rate calculation', static function () {
+    $from = date('Y-m-d', strtotime('-7 days'));
+    $to = date('Y-m-d');
+    $rate = Appointment::noShowRate($from, $to);
+    expectTrue($rate['rate'] >= 0 && $rate['rate'] <= 100, 'rate must be a percentage');
+    expectTrue($rate['no_show'] >= 0);
+    expectTrue($rate['total'] >= 0);
+});
+
+test('Appointment: reminders scheduled on booking', static function () {
+    Session::start();
+    Auth::login(User::findByEmail('admin@medicore.test'));
+    $request = new Request();
+
+    $patientId = (int) Database::scalar('SELECT id FROM patients LIMIT 1');
+    $doctorId = (int) Database::scalar("SELECT id FROM doctors WHERE status = 'active' LIMIT 1");
+    $futureDate = date('Y-m-d', strtotime('+15 days'));
+
+    $r = AppointmentService::book([
+        'patient_id' => $patientId, 'doctor_id' => $doctorId,
+        'appointment_date' => $futureDate, 'start_time' => '09:00', 'end_time' => '09:30',
+        'appointment_type' => 'scheduled', 'reason' => 'Reminder test',
+    ], $request);
+
+    $reminders = Database::query('SELECT * FROM appointment_reminders WHERE appointment_id = ?', [$id]);
+    expectTrue(count($reminders) >= 1, 'at least one reminder should be scheduled');
+    expectTrue($reminders[0]['status'] === 'pending');
+    expectTrue($reminders[0]['channel'] === 'sms');
+
+    Database::execute('DELETE FROM appointment_reminders WHERE appointment_id = ?', [$id]);
+    Database::execute('DELETE FROM appointments WHERE id = ?', [$id]);
+    Auth::logout();
+});
+
+test('Appointment: dashboard appointments stat is now live', static function () {
+    $data = DashboardService::build();
+    $aptStat = $data['stats']['appointments'];
+    expectTrue($aptStat['available'], 'appointments stat should activate');
+    expectTrue($aptStat['value'] >= 1, 'should have appointments today');
+    $modules = array_column($data['modules'], 'ready', 'name');
+    $aptReady = $modules['Appointments'] ?? null;
+    expectTrue($aptReady === true, 'Appointments module marked installed');
+});
+
+test('Search: appointments appear in global results', static function () {
+    $results = SearchService::search('APT-');
+    $groups = array_column($results['groups'], null, 'label');
+    expectTrue(isset($groups['Appointments']), 'appointment results should appear for "APT-"');
 });
 
 // ---------------------------------------------------------------------------

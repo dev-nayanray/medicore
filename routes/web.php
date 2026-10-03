@@ -13,6 +13,7 @@ declare(strict_types=1);
  */
 
 use App\Controllers\Admin\AuditLogController;
+use App\Controllers\Admin\AppointmentController;
 use App\Controllers\Admin\DepartmentController;
 use App\Controllers\Admin\DoctorController;
 use App\Controllers\Admin\StaffController;
@@ -227,6 +228,58 @@ $router->group(['prefix' => '/admin', 'middleware' => ['auth', 'password_current
 
     $r->post('/staff/{id}/leaves/{leaveId}', [StaffController::class, 'decideLeave'])
         ->name('staff.leaves.decide')->middleware('can:staff.update');
+
+    // --- Appointments ----------------------------------------------------
+    $r->get('/appointments', [AppointmentController::class, 'index'])
+        ->name('appointments.index')->middleware('can:appointments.view');
+
+    $r->get('/appointments/calendar', [AppointmentController::class, 'calendar'])
+        ->name('appointments.calendar')->middleware('can:appointments.view');
+
+    $r->get('/appointments/queue', [AppointmentController::class, 'queue'])
+        ->name('appointments.queue')->middleware('can:appointments.view');
+
+    $r->get('/appointments/reports', [AppointmentController::class, 'reports'])
+        ->name('appointments.reports')->middleware('can:appointments.view');
+
+    $r->get('/appointments/export', [AppointmentController::class, 'export'])
+        ->name('appointments.export')->middleware('can:appointments.view');
+
+    $r->get('/appointments/create', [AppointmentController::class, 'create'])
+        ->name('appointments.create')->middleware('can:appointments.create');
+
+    $r->post('/appointments', [AppointmentController::class, 'store'])
+        ->name('appointments.store')->middleware('can:appointments.create');
+
+    $r->get('/appointments/{id}', [AppointmentController::class, 'show'])
+        ->name('appointments.show')->middleware('can:appointments.view');
+
+    $r->get('/appointments/{id}/edit', [AppointmentController::class, 'edit'])
+        ->name('appointments.edit')->middleware('can:appointments.update');
+
+    $r->post('/appointments/{id}/reschedule', [AppointmentController::class, 'reschedule'])
+        ->name('appointments.reschedule')->middleware('can:appointments.update');
+
+    $r->post('/appointments/{id}/cancel', [AppointmentController::class, 'cancel'])
+        ->name('appointments.cancel')->middleware('can:appointments.update');
+
+    $r->post('/appointments/{id}/notes', [AppointmentController::class, 'updateNotes'])
+        ->name('appointments.notes')->middleware('can:appointments.update');
+
+    $r->post('/appointments/{id}/confirm', [AppointmentController::class, 'confirm'])
+        ->name('appointments.confirm')->middleware('can:appointments.approve');
+
+    $r->post('/appointments/{id}/check-in', [AppointmentController::class, 'checkIn'])
+        ->name('appointments.check_in')->middleware('can:appointments.update');
+
+    $r->post('/appointments/{id}/start', [AppointmentController::class, 'startConsultation'])
+        ->name('appointments.start')->middleware('can:appointments.update');
+
+    $r->post('/appointments/{id}/complete', [AppointmentController::class, 'complete'])
+        ->name('appointments.complete')->middleware('can:appointments.update');
+
+    $r->post('/appointments/{id}/no-show', [AppointmentController::class, 'markNoShow'])
+        ->name('appointments.no_show')->middleware('can:appointments.update');
 
     // --- Roles & permissions ---------------------------------------------
     $r->get('/roles', [RoleController::class, 'index'])

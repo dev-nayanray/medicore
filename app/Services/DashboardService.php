@@ -85,14 +85,17 @@ final class DashboardService
         }
 
         $today = (int) Database::scalar(
-            'SELECT COUNT(*) FROM appointments WHERE DATE(appointment_date) = CURDATE()'
+            "SELECT COUNT(*) FROM appointments WHERE appointment_date = CURDATE() AND status NOT IN ('cancelled','no_show')"
+        );
+        $inQueue = (int) Database::scalar(
+            "SELECT COUNT(*) FROM appointments WHERE appointment_date = CURDATE() AND status IN ('checked_in','in_consultation')"
         );
 
         return [
             'available' => true,
             'value'     => $today,
             'suffix'    => '',
-            'secondary' => 'scheduled today',
+            'secondary' => "{$inQueue} in queue now",
         ];
     }
 
@@ -197,10 +200,11 @@ final class DashboardService
         }
 
         $rows = Database::query(
-            'SELECT DATE(appointment_date) AS d, COUNT(*) AS c
+            "SELECT DATE(appointment_date) AS d, COUNT(*) AS c
              FROM appointments
              WHERE appointment_date >= DATE_SUB(CURDATE(), INTERVAL 13 DAY)
-             GROUP BY DATE(appointment_date)'
+               AND status NOT IN ('cancelled','no_show')
+             GROUP BY DATE(appointment_date)"
         );
 
         $byDay = [];

@@ -14,7 +14,6 @@ use App\Core\Database;
 final class SearchService
 {
     private const MODULE_INDEX = [
-        ['label' => 'Appointments', 'icon' => 'calendar-days', 'route' => null, 'table' => 'appointments'],
         ['label' => 'Billing',      'icon' => 'receipt',    'route' => null, 'table' => 'invoices'],
         ['label' => 'Bed manager',  'icon' => 'bed-double', 'route' => null, 'table' => 'beds'],
     ];
@@ -36,6 +35,34 @@ final class SearchService
 
         if ($query === '') {
             return ['query' => '', 'groups' => [], 'modules' => [], 'total' => 0];
+        }
+
+        // --- Appointments (live module, permission-gated) -------------------
+        if (Database::tableExists('appointments') && \App\Core\Auth::can('appointments.view')) {
+            $like = '%' . $query . '%';
+            $rows = Database::query(
+                "SELECT a.id, a.appointment_code, a.appointment_date, a.start_time,
+                        CONCAT(p.first_name, ' ', p.last_name) AS patient_name
+                 FROM appointments a
+                 LEFT JOIN patients p ON p.id = a.patient_id
+                 WHERE a.appointment_code LIKE ? OR a.queue_token LIKE ?
+                    OR p.first_name LIKE ? OR p.last_name LIKE ?
+                    OR CONCAT(p.first_name, ' ', p.last_name) LIKE ?
+                 ORDER BY a.appointment_date DESC, a.start_time DESC LIMIT 5",
+                [$like, $like, $like, $like, $like]
+            );
+            if ($rows !== []) {
+                $results = [];
+                foreach ($rows as $row) {
+                    $results[] = [
+                        'title'    => "{$row['appointment_code']} · {$row['patient_name']}",
+                        'subtitle' => 'Appointment · ' . format_date($row['appointment_date'], 'M j, g:i A'),
+                        'url'      => url('/admin/appointments/' . (int) $row['id']),
+                    ];
+                }
+                $total += count($results);
+                $groups[] = ['label' => 'Appointments', 'icon' => 'calendar-days', 'results' => $results];
+            }
         }
 
         // --- Patients (live module, permission-gated) -------------------

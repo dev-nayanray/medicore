@@ -25,6 +25,7 @@ use App\Core\Config;
 use App\Core\Database;
 use App\Core\Logger;
 use App\Core\Migrator;
+use Seeders\AppointmentSeeder;
 use Seeders\AuditLogSeeder;
 use Seeders\DepartmentSeeder;
 use Seeders\DoctorSeeder;
@@ -67,6 +68,7 @@ function seeders(): array
         DoctorSeeder::class,
         StaffSeeder::class,
         PatientSeeder::class,
+        AppointmentSeeder::class,
         AuditLogSeeder::class,
     ];
     usort($all, static fn (string $a, string $b): int => $a::order() <=> $b::order());

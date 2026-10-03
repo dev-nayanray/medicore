@@ -1,7 +1,7 @@
 # PROJECT_CONTEXT — MediCore HMS
 
 > **Purpose:** the durable architecture contract for every future phase.
-> Read this before adding any module. Last updated: Phase 4 (doctors, staff, departments).
+> Read this before adding any module. Last updated: Phase 5 (appointments & queue).
 
 ---
 
@@ -173,7 +173,7 @@ backing table exists (`DashboardService::moduleStatus()` + stat guards):
 | ~~Doctors~~ | `doctors`, `doctor_schedules`, `doctor_leaves` | doctors.view/create/update/delete | ✅ Phase 4 |
 | ~~Departments~~ | `departments` | departments.view/create/update/delete | ✅ Phase 4 |
 | ~~Staff~~ | `staff_profiles`, `staff_shifts`, `staff_attendance`, `staff_leaves` | staff.view/create/update/delete | ✅ Phase 4 |
-| Appointments | `appointments` | appointments.* (incl. approve) | ⏳ |
+| ~~Appointments~~ | `appointments`, `appointment_reminders` | appointments.view/create/update/delete/approve | ✅ Phase 5 |
 | Bed management | `beds` | beds.view/update | ⏳ |
 | Laboratory | `lab_tests` | laboratory.* (incl. approve) | ⏳ |
 | Pharmacy | `medicines` | pharmacy.* | ⏳ |
@@ -288,7 +288,7 @@ public/index.php (sole web entry point)
 8. Add audit logging to every write action.
 9. Extend `tests/run.php` with module tests; run `php console test`.
 
-## 7. Known limitations (accepted through phase 4)
+## 7. Known limitations (accepted through phase 5)
 
 - Deactivating/archiving a user does not kill their live session instantly;
   it lands on the next 5-minute snapshot re-sync or their next request after
@@ -326,6 +326,81 @@ public/index.php (sole web entry point)
   not yet rendered inline on directory cards/profile pages. A future
   image-serving route (permission-gated, like patient document downloads)
   would enable inline display without exposing files as public URLs.
+
+### ✅ Phase 5 — Appointment & Queue Management (COMPLETE, verified 2026-10-04)
+
+| Area | State |
+|---|---|
+| Book / edit / reschedule / cancel / complete appointments | ✅ Live |
+| Patient + doctor + department + date + time slot selection | ✅ Live |
+| Walk-in appointments (auto checked-in + immediate queue token) | ✅ Live |
+| Auto-generated unique codes (APT-YYYY-NNNNN, collision-safe) | ✅ Live |
+| Per-day sequential queue tokens (Q-NNN, per-department) | ✅ Live |
+| Status lifecycle: pending → confirmed → checked_in → in_consultation → completed (or cancelled / no_show) | ✅ Live |
+| Overlap prevention via DB transaction + SELECT ... FOR UPDATE + range-overlap check | ✅ Live |
+| Adjacent slots allowed (end == start boundary touch) | ✅ Live |
+| Doctor schedule validation (booking must fall within a working slot, skip for walk-in/telemedicine) | ✅ Live |
+| Doctor leave blocking (skip schedule validation when doctor is on leave that day) | ✅ Live |
+| Queue dashboard: swim-lanes by status, quick-action buttons, today's stats tiles | ✅ Live |
+| Calendar: day / week / month views with color-coded status indicators | ✅ Live |
+| Appointment directory: search + status/type/doctor/department/date filters + CSV export | ✅ Live |
+| Reports: status breakdown, type breakdown, doctor leaderboard, 14-day volume chart, no-show rate | ✅ Live |
+| Configurable appointment reminders (appointment_reminders table, 24h-before schedule, process() gateway adapter) | ✅ Live |
+| Status transition validation (enforced lifecycle map — terminal states blocked) | ✅ Live |
+| Audit coverage: created / confirmed / checked_in / in_consultation / completed / cancelled / no_show / rescheduled / notes_updated / exported | ✅ Live |
+| Role-based access: appointments.view / create / update / delete / approve on all routes | ✅ Live |
+| Dashboard integration: appointments stat tile live, daily-volume chart, quick-action buttons, sidebar link | ✅ Live |
+| Global search returns appointment results (permission-gated) | ✅ Live |
+| Test suite: 11 new assertions covering code gen, overlap prevention, walk-in lifecycle, status transitions, cancel, queue tokens, directory filters, no-show rate, reminders, dashboard stat, search | ✅ Live |
+
+**Key mechanics to preserve:**
+
+- **Overlap detection (`Appointment::overlaps`):** range overlap formula
+  `start1 < end2 AND start2 < end1`. Touching boundaries (end == start)
+  are allowed — adjacent slots are not overlapping. Cancelled and no-show
+  appointments are excluded from the overlap check.
+- **Concurrent booking prevention (`AppointmentService::book`):** the
+  overlap check + INSERT run inside a `beginTransaction()` /
+  `commit()` block. Before the check, `SELECT id FROM appointments WHERE
+  doctor_id = ? AND appointment_date = ? FOR UPDATE` locks all existing
+  rows for that doctor + date. Any concurrent transaction trying the
+  same lock blocks until the first commits, then sees the new row and
+  correctly detects the overlap. The unique constraint
+  `(doctor_id, appointment_date, start_time)` is a last-resort guard at
+  the DB level for exact-time duplicates.
+- **Walk-ins vs scheduled:** walk-ins (`appointment_type = 'walk_in'`)
+  auto-start in `checked_in` status and get a queue token immediately.
+  Scheduled appointments start in `pending` and get a queue token only
+  when checked in. Walk-ins require a doctor only if the front desk
+  assigns one at booking time; unassigned walk-ins are allowed.
+- **Queue token generation (`Appointment::nextQueueToken`):** reads
+  `MAX(sequence)` for the given date (+ optional department), increments,
+  formats as `Q-NNN`. Walk-ins get it at booking; scheduled appointments
+  get it at the `checked_in` transition.
+- **Status transition map:** enforced server-side in
+  `AppointmentService::TRANSITIONS`. Terminal states (completed,
+  cancelled, no_show) have empty allowed-next arrays. Attempting an
+  illegal transition returns `['ok' => false, 'error' => …]`.
+  Side effects per transition: `checked_in` stamps `checked_in_at` +
+  assigns `queue_token`; `in_consultation` stamps
+  `consultation_started_at`; `completed` stamps `completed_at`.
+- **Doctor schedule integration:** `AppointmentService::book` calls
+  `DoctorSchedule::slotsForDate()` to find the doctor's working slots
+  for that day-of-week. The booking's (start, end) must fall within a
+  slot's (start, end). Walk-ins and telemedicine appointments skip this
+  check (they may be outside regular hours). If the doctor is on leave
+  (`DoctorSchedule::isOnLeaveOn`), the schedule check is skipped (the
+  leave record is the authoritative block).
+- **Reminders:** `AppointmentService::scheduleReminder()` creates a
+  `appointment_reminders` row scheduled 24h before the appointment. If
+  the appointment is within 24h, the reminder is due immediately.
+  `AppointmentService::processReminders()` is the integration-ready
+  gateway: it queries due pending reminders, "sends" them (dev transport
+  writes to `storage/logs/mail.log`), marks them `sent`. Swap the
+  `file_put_contents` call for a real SMS/email API in production — the
+  DB schema and service contract stay unchanged. Reschedule cancels
+  pending reminders and schedules a new one for the new date. Cancel
+  cancels pending reminders too.
 - Staff shift overlap detection prevents same-day double-booking for one
   staff member, but does not enforce minimum rest between an evening shift
   end and a next-day morning shift start. That gap rule can be added to
@@ -336,3 +411,21 @@ public/index.php (sole web entry point)
 - Leave balance / accrual tracking (annual leave entitlement + consumed
   count) is not modelled. The current design records each leave request
   individually; a future balance ledger could aggregate them per year.
+- Appointment reminders use a dev transport (`storage/logs/mail.log`).
+  `AppointmentService::processReminders()` is the integration-ready hook
+  — swap the `file_put_contents` call for a real SMS/email API in
+  production. `php console` does not yet have an `appointments:remind`
+  command; a cron job should call `AppointmentService::processReminders()`
+  every 5 minutes in production.
+- The calendar views are server-rendered (full page reload on view/date
+  change). A future Alpine-powered AJAX calendar would avoid the reload
+  for smoother navigation; the current design is fast enough for an
+  admin tool.
+- Appointment reschedule does not notify the patient automatically. The
+  reminder is re-scheduled for the new date, but no "your appointment
+  has been rescheduled" notification is sent. Add a second reminder row
+  with `channel = 'in_app'` or a direct notification if needed.
+- No-show detection is manual (a supervisor clicks "No-show"). Auto
+  no-show detection (mark as no_show if `checked_in_at` is still NULL
+  30 minutes past `start_time`) is not implemented; a scheduled job
+  could handle this.
