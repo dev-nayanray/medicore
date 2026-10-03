@@ -95,11 +95,11 @@ final class MarketingController extends Controller
 
     /**
      * Render a marketing page using the marketing layout.
-     * Marketing pages live in resources/views/marketing/.
+     * Marketing pages live in resources/views/marketing/ and extend 'layouts/marketing'.
+     * Uses View::make() (the public factory) — not new View() (private constructor).
      */
     private function renderMarketing(string $page, array $data = []): string
     {
-        $view = new \App\Core\View();
-        return $view->renderMarketing($page, $data);
+        return \App\Core\View::make('marketing/' . $page, $data)->render();
     }
 }
