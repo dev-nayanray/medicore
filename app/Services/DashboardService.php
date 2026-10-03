@@ -271,9 +271,10 @@ final class DashboardService
             ['name' => 'Billing',         'table' => 'invoices'],
             ['name' => 'Services',        'table' => 'services'],
             ['name' => 'Expenses',        'table' => 'expenses'],
-            ['name' => 'Bed management',  'table' => 'beds'],
-            ['name' => 'Laboratory',      'table' => 'lab_tests'],
             ['name' => 'Pharmacy',        'table' => 'medicines'],
+            ['name' => 'Laboratory',      'table' => 'lab_tests'],
+            ['name' => 'Inventory',       'table' => 'inventory_items'],
+            ['name' => 'Bed management',  'table' => 'beds'],
         ];
 
         foreach ($modules as &$module) {

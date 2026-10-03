@@ -47,8 +47,9 @@ $menu = [
     [
         'label' => 'Operations', 'items' => [
             ['key' => 'beds',   'label' => 'Bed Management', 'href' => '#', 'icon' => 'bed-double',  'can' => null, 'soon' => true],
-            ['key' => 'lab',    'label' => 'Laboratory',     'href' => '#', 'icon' => 'flask-conical','can' => null, 'soon' => true],
-            ['key' => 'pharma', 'label' => 'Pharmacy',       'href' => '#', 'icon' => 'pill',        'can' => null, 'soon' => true],
+            ['key' => 'lab',    'label' => 'Laboratory',     'href' => url('/admin/laboratory'), 'icon' => 'flask-conical','can' => 'laboratory.view', 'soon' => false],
+            ['key' => 'pharma', 'label' => 'Pharmacy',       'href' => url('/admin/pharmacy'), 'icon' => 'pill',        'can' => 'pharmacy.view', 'soon' => false],
+            ['key' => 'inventory', 'label' => 'Inventory',   'href' => url('/admin/inventory'), 'icon' => 'boxes',  'can' => 'inventory.view', 'soon' => false],
         ],
     ],
     [

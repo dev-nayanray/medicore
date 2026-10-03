@@ -1,7 +1,7 @@
 # PROJECT_CONTEXT — MediCore HMS
 
 > **Purpose:** the durable architecture contract for every future phase.
-> Read this before adding any module. Last updated: Phase 7 (billing & financial management).
+> Read this before adding any module. Last updated: Phase 8 (pharmacy, inventory, laboratory).
 
 ---
 
@@ -176,9 +176,10 @@ backing table exists (`DashboardService::moduleStatus()` + stat guards):
 | ~~Appointments~~ | `appointments`, `appointment_reminders` | appointments.view/create/update/delete/approve | ✅ Phase 5 |
 | ~~Consultations~~ | `consultations`, `prescriptions`, `prescription_items`, `consultation_attachments`, `consultation_amendments` | consultations.view/create/update/finalize/amend, prescriptions.view/create/update/finalize | ✅ Phase 6 |
 | ~~Billing~~ | `invoices`, `invoice_items`, `payments`, `services`, `expenses` | billing.view/create/update/delete/approve, payments.view/create/approve, expenses.view/create/update/delete | ✅ Phase 7 |
+| ~~Pharmacy~~ | `medicines`, `medicine_batches`, `medicine_purchases`, `medicine_dispensings`, `medicine_returns`, `stock_movements`, `suppliers` | pharmacy.view/create/update | ✅ Phase 8 |
+| ~~Laboratory~~ | `lab_tests`, `lab_orders`, `lab_order_items`, `lab_critical_alerts` | laboratory.view/create/update/approve | ✅ Phase 8 |
+| ~~Inventory~~ | `inventory_categories`, `inventory_items`, `inventory_purchases`, `inventory_adjustments`, `stock_movements` | inventory.view/create/update/delete | ✅ Phase 8 |
 | Bed management | `beds` | beds.view/update | ⏳ |
-| Laboratory | `lab_tests` | laboratory.* (incl. approve) | ⏳ |
-| Pharmacy | `medicines` | pharmacy.* | ⏳ |
 | Reports | — | reports.view/export | ⏳ |
 
 ---
@@ -289,7 +290,7 @@ public/index.php (sole web entry point)
 8. Add audit logging to every write action.
 9. Extend `tests/run.php` with module tests; run `php console test`.
 
-## 7. Known limitations (accepted through phase 7)
+## 7. Known limitations (accepted through phase 8)
 
 - Deactivating/archiving a user does not kill their live session instantly;
   it lands on the next 5-minute snapshot re-sync or their next request after
@@ -581,3 +582,69 @@ public/index.php (sole web entry point)
   preserve invoice item references. The `medicine_name` on prescriptions
   is free-text — when the pharmacy module ships, services can be
   cross-referenced.
+
+### ✅ Phase 8 — Pharmacy, Inventory & Laboratory Management (COMPLETE, verified 2026-10-04)
+
+| Area | State |
+|---|---|
+| Medicine catalogue (generic, brand, dosage form, strength, reorder level) | ✅ Live |
+| Batch-level stock with expiry dates + FEFO deduction (first-expiry-first-out) | ✅ Live |
+| Supplier management (shared pharmacy + inventory) | ✅ Live |
+| Medicine purchase orders + receiving (creates batches, logs stock movements) | ✅ Live |
+| Prescription-based dispensing + direct sales (transaction-protected) | ✅ Live |
+| Medicine returns with batch stock restoration | ✅ Live |
+| Unified stock movement log (medicine + inventory, all types) | ✅ Live |
+| Low-stock and expiry notifications (90-day window) | ✅ Live |
+| Inventory categories + items with SKU, unit, reorder level, valuation | ✅ Live |
+| Inventory purchase receiving (increases stock + logs movement) | ✅ Live |
+| Stock adjustments with approval workflow (pending → approved/rejected) | ✅ Live |
+| Inventory valuation (current_stock × unit_value) | ✅ Live |
+| Lab test catalogue with pricing, sample type, turnaround hours | ✅ Live |
+| Lab order creation with automatic invoice generation (billing integration) | ✅ Live |
+| Sample collection tracking (ordered → collected) | ✅ Live |
+| Test result entry with unit, reference range, critical flag | ✅ Live |
+| Verification with separation of duties (cannot verify own result) | ✅ Live |
+| Authorized report release (verified → released) + printable report | ✅ Live |
+| Critical result alert workflow (pending → acknowledged) | ✅ Live |
+| Lab work queue (ordered/collected/resulted/verified/released) | ✅ Live |
+| Pharmacy dispensing creates invoice automatically (billing integration) | ✅ Live |
+| Lab order creates invoice automatically (billing integration) | ✅ Live |
+| Audit coverage: medicine created, dispensed, returned, purchase received, lab order created, sample collected, result entered/verified/released, critical alert acknowledged, inventory item created, purchase received, adjustment requested/approved/rejected | ✅ Live |
+| Role-based access: pharmacy.view/create/update, laboratory.view/create/update/approve, inventory.view/create/update/delete | ✅ Live |
+| Sidebar: Pharmacy, Laboratory, Inventory links (replaced Soon placeholders) | ✅ Live |
+| Dashboard module registry marks Pharmacy, Laboratory, Inventory installed | ✅ Live |
+
+**Key mechanics to preserve:**
+
+- **FEFO batch deduction (`MedicineBatch::deductFEFO`):** deducts from the
+  earliest-expiring batch first (first-expiry-first-out). Each batch's
+  `quantity_remaining` is decremented, and the total is tracked. If
+  insufficient stock across all batches, the operation fails. Used by
+  `PharmacyService::dispense()`.
+- **Transaction-protected dispensing:** `PharmacyService::dispense()` runs
+  inside a `beginTransaction` / `commit` block. Stock is checked, deducted
+  (FEFO), stock movements are logged, a dispensing record is created, and
+  an optional invoice is generated — all atomically. If any step fails,
+  the entire operation rolls back.
+- **Stock movement logging (`StockMovement::log`):** every stock change
+  (purchase, dispensing, return, adjustment) is logged with the item type,
+  item ID, batch ID, movement type, quantity (positive=in, negative=out),
+  reference, and balance_after. This provides a complete audit trail for
+  stock consistency verification.
+- **Inventory adjustment approval workflow:** `InventoryService::requestAdjustment()`
+  creates a pending adjustment. `approveAdjustment()` applies the stock
+  change inside a transaction + row lock (`FOR UPDATE`). `rejectAdjustment()`
+  marks it rejected. Only `pending` adjustments can be approved/rejected.
+- **Lab result verification (separation of duties):**
+  `LaboratoryService::verifyResult()` checks that the user ID of the person
+  verifying is DIFFERENT from the person who entered the result
+  (`resulted_by`). This prevents a lab technician from verifying their own
+  results — a critical clinical safety control.
+- **Lab order status recalculation (`LaboratoryService::recalculateOrderStatus`):**
+  after every item status change (collect/result/verify/release), the
+  order's overall status is recomputed based on the item statuses. The
+  order status is the "lowest" (earliest) status across all items.
+- **Billing integration:** both pharmacy dispensing and lab order creation
+  automatically generate invoices. The invoice is linked via `invoice_id`
+  FK on `medicine_dispensings` and `lab_orders`. Invoice items are created
+  from the dispensed medicines / ordered tests with their prices.

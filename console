@@ -31,8 +31,10 @@ use Seeders\BillingSeeder;
 use Seeders\ConsultationSeeder;
 use Seeders\DepartmentSeeder;
 use Seeders\DoctorSeeder;
+use Seeders\LaboratorySeeder;
 use Seeders\PatientSeeder;
 use Seeders\PermissionSeeder;
+use Seeders\PharmacySeeder;
 use Seeders\RolePermissionSeeder;
 use Seeders\RoleSeeder;
 use Seeders\ServiceSeeder;
@@ -68,12 +70,14 @@ function seeders(): array
         UserSeeder::class,
         SettingSeeder::class,
         ServiceSeeder::class,
+        PharmacySeeder::class,
         DepartmentSeeder::class,
         DoctorSeeder::class,
         StaffSeeder::class,
         PatientSeeder::class,
         AppointmentSeeder::class,
         ConsultationSeeder::class,
+        LaboratorySeeder::class,
         BillingSeeder::class,
         AuditLogSeeder::class,
     ];

@@ -19,6 +19,9 @@ use App\Controllers\Admin\ConsultationController;
 use App\Controllers\Admin\DepartmentController;
 use App\Controllers\Admin\DoctorController;
 use App\Controllers\Admin\ExpenseController;
+use App\Controllers\Admin\InventoryController;
+use App\Controllers\Admin\LaboratoryController;
+use App\Controllers\Admin\PharmacyController;
 use App\Controllers\Admin\PrescriptionController;
 use App\Controllers\Admin\ServiceController;
 use App\Controllers\Admin\StaffController;
@@ -401,6 +404,74 @@ $router->group(['prefix' => '/admin', 'middleware' => ['auth', 'password_current
 
     $r->post('/expenses/{id}/delete', [ExpenseController::class, 'destroy'])
         ->name('expenses.delete')->middleware('can:expenses.delete');
+
+    // --- Pharmacy ---------------------------------------------------------
+    $r->get('/pharmacy', [PharmacyController::class, 'index'])
+        ->name('pharmacy.index')->middleware('can:pharmacy.view');
+    $r->get('/pharmacy/create', [PharmacyController::class, 'index'])
+        ->name('pharmacy.create')->middleware('can:pharmacy.create');
+    $r->post('/pharmacy', [PharmacyController::class, 'store'])
+        ->name('pharmacy.store')->middleware('can:pharmacy.create');
+    $r->get('/pharmacy/{id}', [PharmacyController::class, 'show'])
+        ->name('pharmacy.show')->middleware('can:pharmacy.view');
+    $r->get('/pharmacy/dispense', [PharmacyController::class, 'dispense'])
+        ->name('pharmacy.dispense')->middleware('can:pharmacy.create');
+    $r->post('/pharmacy/dispense', [PharmacyController::class, 'storeDispensing'])
+        ->name('pharmacy.dispense.store')->middleware('can:pharmacy.create');
+    $r->get('/pharmacy/dispensing/{id}', [PharmacyController::class, 'showDispensing'])
+        ->name('pharmacy.dispensing.show')->middleware('can:pharmacy.view');
+    $r->post('/pharmacy/dispensing/{id}/return', [PharmacyController::class, 'returnMedicine'])
+        ->name('pharmacy.return')->middleware('can:pharmacy.update');
+    $r->get('/pharmacy/purchases', [PharmacyController::class, 'purchases'])
+        ->name('pharmacy.purchases')->middleware('can:pharmacy.view');
+    $r->post('/pharmacy/purchases', [PharmacyController::class, 'storePurchase'])
+        ->name('pharmacy.purchases.store')->middleware('can:pharmacy.create');
+    $r->get('/pharmacy/purchases/{id}', [PharmacyController::class, 'showPurchase'])
+        ->name('pharmacy.purchases.show')->middleware('can:pharmacy.view');
+    $r->post('/pharmacy/purchases/{id}/receive', [PharmacyController::class, 'receivePurchase'])
+        ->name('pharmacy.purchases.receive')->middleware('can:pharmacy.update');
+
+    // --- Inventory --------------------------------------------------------
+    $r->get('/inventory', [InventoryController::class, 'index'])
+        ->name('inventory.index')->middleware('can:inventory.view');
+    $r->post('/inventory/items', [InventoryController::class, 'storeItem'])
+        ->name('inventory.items.store')->middleware('can:inventory.create');
+    $r->get('/inventory/{id}', [InventoryController::class, 'showItem'])
+        ->name('inventory.show')->middleware('can:inventory.view');
+    $r->post('/inventory/purchases', [InventoryController::class, 'storePurchase'])
+        ->name('inventory.purchases.store')->middleware('can:inventory.create');
+    $r->get('/inventory/purchases/{id}', [InventoryController::class, 'showPurchase'])
+        ->name('inventory.purchases.show')->middleware('can:inventory.view');
+    $r->post('/inventory/purchases/{id}/receive', [InventoryController::class, 'receivePurchase'])
+        ->name('inventory.purchases.receive')->middleware('can:inventory.update');
+    $r->post('/inventory/adjustments', [InventoryController::class, 'requestAdjustment'])
+        ->name('inventory.adjustments.store')->middleware('can:inventory.create');
+    $r->post('/inventory/adjustments/{id}/approve', [InventoryController::class, 'approveAdjustment'])
+        ->name('inventory.adjustments.approve')->middleware('can:inventory.update');
+    $r->post('/inventory/adjustments/{id}/reject', [InventoryController::class, 'rejectAdjustment'])
+        ->name('inventory.adjustments.reject')->middleware('can:inventory.update');
+
+    // --- Laboratory -------------------------------------------------------
+    $r->get('/laboratory', [LaboratoryController::class, 'index'])
+        ->name('laboratory.index')->middleware('can:laboratory.view');
+    $r->get('/laboratory/create', [LaboratoryController::class, 'create'])
+        ->name('laboratory.create')->middleware('can:laboratory.create');
+    $r->post('/laboratory', [LaboratoryController::class, 'store'])
+        ->name('laboratory.store')->middleware('can:laboratory.create');
+    $r->get('/laboratory/{id}', [LaboratoryController::class, 'show'])
+        ->name('laboratory.show')->middleware('can:laboratory.view');
+    $r->post('/laboratory/{id}/items/{itemId}/collect', [LaboratoryController::class, 'collectSample'])
+        ->name('laboratory.collect')->middleware('can:laboratory.update');
+    $r->post('/laboratory/{id}/items/{itemId}/result', [LaboratoryController::class, 'enterResult'])
+        ->name('laboratory.result')->middleware('can:laboratory.update');
+    $r->post('/laboratory/{id}/items/{itemId}/verify', [LaboratoryController::class, 'verifyResult'])
+        ->name('laboratory.verify')->middleware('can:laboratory.approve');
+    $r->post('/laboratory/{id}/items/{itemId}/release', [LaboratoryController::class, 'releaseResult'])
+        ->name('laboratory.release')->middleware('can:laboratory.approve');
+    $r->post('/laboratory/{id}/alerts/{alertId}/acknowledge', [LaboratoryController::class, 'acknowledgeAlert'])
+        ->name('laboratory.acknowledge')->middleware('can:laboratory.update');
+    $r->get('/laboratory/{id}/print', [LaboratoryController::class, 'printReport'])
+        ->name('laboratory.print')->middleware('can:laboratory.view');
 
     // --- Roles & permissions ---------------------------------------------
     $r->get('/roles', [RoleController::class, 'index'])

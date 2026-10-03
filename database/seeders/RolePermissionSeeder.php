@@ -26,6 +26,7 @@ final class RolePermissionSeeder extends Seeder
                 'patients.view', 'appointments.*', 'doctors.*', 'departments.*', 'staff.*',
                 'consultations.*', 'prescriptions.*',
                 'billing.*', 'payments.*', 'expenses.*',
+                'pharmacy.*', 'laboratory.*', 'inventory.*',
                 'beds.view', 'reports.*',
             ],
             'doctor' => [
@@ -33,29 +34,31 @@ final class RolePermissionSeeder extends Seeder
                 'laboratory.update', 'laboratory.approve', 'pharmacy.view', 'reports.view',
                 'staff.view', 'departments.view',
                 'consultations.*', 'prescriptions.*',
-                'billing.view',
+                'billing.view', 'laboratory.create', 'inventory.view',
             ],
             'nurse' => [
                 'dashboard.view', 'patients.view', 'patients.update', 'appointments.view',
                 'beds.*', 'laboratory.view', 'staff.view', 'departments.view',
-                'consultations.view', 'prescriptions.view',
+                'consultations.view', 'prescriptions.view', 'pharmacy.view', 'inventory.view',
             ],
             'receptionist' => [
                 'dashboard.view', 'patients.*', 'appointments.*', 'doctors.view',
                 'departments.view', 'staff.view',
                 'billing.view', 'billing.create', 'payments.view', 'payments.create', 'expenses.view',
-                'consultations.view',
+                'consultations.view', 'pharmacy.view', 'laboratory.view', 'inventory.view',
             ],
             'pharmacist' => [
                 'dashboard.view', 'pharmacy.*', 'departments.view',
                 'prescriptions.view', 'prescriptions.finalize',
+                'inventory.view',
             ],
             'lab-technician' => [
                 'dashboard.view', 'laboratory.*', 'departments.view',
+                'inventory.view',
             ],
             'accountant' => [
                 'dashboard.view', 'billing.*', 'payments.*', 'expenses.*', 'reports.view', 'reports.export',
-                'staff.view', 'departments.view',
+                'staff.view', 'departments.view', 'inventory.view', 'pharmacy.view',
             ],
         ];
 

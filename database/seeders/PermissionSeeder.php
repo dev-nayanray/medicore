@@ -37,6 +37,7 @@ final class PermissionSeeder extends Seeder
             'beds'        => ['view', 'update'],
             'laboratory'  => ['view', 'create', 'update', 'approve'],
             'pharmacy'    => ['view', 'create', 'update'],
+            'inventory'   => ['view', 'create', 'update', 'delete'],
             'billing'     => ['view', 'create', 'update', 'delete', 'approve'],
             'payments'    => ['view', 'create', 'approve'],
             'expenses'    => ['view', 'create', 'update', 'delete'],
