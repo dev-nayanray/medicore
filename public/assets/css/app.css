@@ -1,0 +1,323 @@
+/* ==========================================================================
+   MediCore design system — component classes complementing Tailwind
+   utilities. Plain CSS (no build step); dark mode via html.dark.
+   ========================================================================== */
+
+[x-cloak] { display: none !important; }
+
+/* --------------------------------------------------------------------------
+   Buttons
+   -------------------------------------------------------------------------- */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-radius: 0.625rem;
+    border: 1px solid transparent;
+    padding: 0.5rem 0.9rem;
+    font-size: 0.8125rem; /* 13px */
+    font-weight: 600;
+    line-height: 1.25rem;
+    cursor: pointer;
+    transition: background-color .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease, transform .05s ease;
+    white-space: nowrap;
+    user-select: none;
+}
+.btn:active { transform: translateY(1px); }
+.btn:focus-visible { outline: 2px solid #14b8a6; outline-offset: 2px; }
+
+.btn-primary {
+    background: linear-gradient(135deg, #0d9488, #0f766e);
+    color: #fff;
+    box-shadow: 0 1px 2px rgb(13 148 136 / .35), inset 0 1px 0 rgb(255 255 255 / .12);
+}
+.btn-primary:hover { background: linear-gradient(135deg, #0f8377, #115e59); }
+.dark .btn-primary { background: linear-gradient(135deg, #14b8a6, #0d9488); }
+.dark .btn-primary:hover { background: linear-gradient(135deg, #0d9488, #0f766e); }
+
+.btn-secondary {
+    background: #fff;
+    border-color: #e2e8f0;
+    color: #334155;
+    box-shadow: 0 1px 2px rgb(15 23 42 / .05);
+}
+.btn-secondary:hover { background: #f8fafc; border-color: #cbd5e1; }
+.dark .btn-secondary { background: #1e293b; border-color: #334155; color: #e2e8f0; }
+.dark .btn-secondary:hover { background: #273449; border-color: #475569; }
+
+.btn-danger {
+    background: #e11d48;
+    color: #fff;
+}
+.btn-danger:hover { background: #be123c; }
+
+/* Icon-only square button (topbar) */
+.icon-btn {
+    display: grid;
+    place-items: center;
+    border-radius: 0.625rem;
+    padding: 0.5rem;
+    color: #64748b;
+    transition: background-color .15s ease, color .15s ease;
+    cursor: pointer;
+}
+.icon-btn:hover { background: #f1f5f9; color: #0f172a; }
+.dark .icon-btn { color: #94a3b8; }
+.dark .icon-btn:hover { background: #1e293b; color: #f1f5f9; }
+
+/* --------------------------------------------------------------------------
+   Forms
+   -------------------------------------------------------------------------- */
+.label {
+    display: block;
+    margin-bottom: 0.375rem;
+    font-size: 0.75rem; /* 12px */
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: #475569;
+}
+.dark .label { color: #94a3b8; }
+
+.input {
+    display: block;
+    width: 100%;
+    border-radius: 0.625rem;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8125rem;
+    line-height: 1.4rem;
+    color: #1e293b;
+    box-shadow: 0 1px 2px rgb(15 23 42 / .04);
+    transition: border-color .15s ease, box-shadow .15s ease;
+}
+.input::placeholder { color: #94a3b8; }
+.input:focus { outline: none; border-color: #14b8a6; box-shadow: 0 0 0 3px rgb(20 184 166 / .15); }
+.dark .input { background: #0f172a; border-color: #334155; color: #e2e8f0; }
+.dark .input:focus { border-color: #2dd4bf; box-shadow: 0 0 0 3px rgb(45 212 191 / .12); }
+
+.input-error { border-color: #f43f5e !important; }
+.input-error:focus { box-shadow: 0 0 0 3px rgb(244 63 94 / .15) !important; }
+
+.error-text {
+    margin-top: 0.375rem;
+    font-size: 0.75rem;
+    color: #f43f5e;
+}
+
+/* Password visibility toggle */
+.password-toggle {
+    position: absolute;
+    right: 0.65rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+    padding: 0.25rem;
+    border-radius: 0.375rem;
+    cursor: pointer;
+}
+.password-toggle:hover { color: #475569; }
+
+/* Checkbox toggle (settings) */
+.toggle-row { display: inline-flex; align-items: center; gap: 0.625rem; cursor: pointer; }
+.checkbox { position: absolute; opacity: 0; pointer-events: none; }
+.toggle-track {
+    width: 2.5rem; height: 1.375rem;
+    border-radius: 9999px;
+    background: #cbd5e1;
+    padding: 2px;
+    transition: background-color .18s ease;
+    display: inline-flex;
+    flex-shrink: 0;
+}
+.toggle-knob {
+    width: 1.125rem; height: 1.125rem;
+    border-radius: 9999px;
+    background: #fff;
+    box-shadow: 0 1px 3px rgb(0 0 0 / .25);
+    transition: transform .18s ease;
+}
+.checkbox:checked + .toggle-track { background: #0d9488; }
+.checkbox:checked + .toggle-track .toggle-knob { transform: translateX(1.125rem); }
+.dark .toggle-track { background: #334155; }
+
+/* --------------------------------------------------------------------------
+   Cards
+   -------------------------------------------------------------------------- */
+.card {
+    border-radius: 0.875rem;
+    border: 1px solid rgb(226 232 240 / .8);
+    background: #fff;
+    box-shadow: 0 1px 2px 0 rgb(15 23 42 / .04), 0 1px 3px 0 rgb(15 23 42 / .06);
+}
+.dark .card {
+    border-color: rgb(51 65 85 / .7);
+    background: #111c2e;
+}
+
+/* --------------------------------------------------------------------------
+   Badges
+   -------------------------------------------------------------------------- */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    border-radius: 9999px;
+    padding: 0.125rem 0.55rem;
+    font-size: 0.6875rem; /* 11px */
+    font-weight: 600;
+    line-height: 1.35;
+    letter-spacing: 0.01em;
+}
+.badge-teal    { background: rgb(20 184 166 / .12);  color: #0f766e; }
+.badge-emerald { background: rgb(16 185 129 / .12);  color: #047857; }
+.badge-amber   { background: rgb(245 158 11 / .14);  color: #b45309; }
+.badge-rose    { background: rgb(244 63 94 / .12);   color: #be123c; }
+.badge-navy    { background: rgb(58 115 166 / .12);  color: #234a70; }
+.badge-slate   { background: rgb(100 116 139 / .12); color: #64748b; }
+.dark .badge-teal    { color: #5eead4; }
+.dark .badge-emerald { color: #6ee7b7; }
+.dark .badge-amber   { color: #fcd34d; }
+.dark .badge-rose    { color: #fda4af; }
+.dark .badge-navy    { color: #a5c4e2; }
+.dark .badge-slate   { color: #94a3b8; }
+
+/* --------------------------------------------------------------------------
+   Sidebar navigation
+   -------------------------------------------------------------------------- */
+.nav-link {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    border-radius: 0.625rem;
+    padding: 0.55rem 0.75rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: #94a3b8;
+    width: 100%;
+    transition: background-color .15s ease, color .15s ease;
+}
+.nav-link:hover { background: rgb(255 255 255 / .06); color: #fff; }
+.nav-link.is-active {
+    background: rgb(255 255 255 / .07);
+    color: #fff;
+}
+.nav-link.is-active::before {
+    content: "";
+    position: absolute;
+    left: -12px; top: 20%; bottom: 20%;
+    width: 3px;
+    border-radius: 9999px;
+    background: #2dd4bf;
+    box-shadow: 0 0 12px rgb(45 212 191 / .8);
+}
+.nav-link.is-active svg { color: #2dd4bf; }
+
+/* Dropdown menu item (profile menu) */
+.menu-item {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    border-radius: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: #334155;
+    width: 100%;
+    text-align: left;
+    transition: background-color .12s ease;
+}
+.menu-item:hover { background: #f1f5f9; }
+.dark .menu-item { color: #cbd5e1; }
+.dark .menu-item:hover { background: #1e293b; }
+
+/* --------------------------------------------------------------------------
+   Tables
+   -------------------------------------------------------------------------- */
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+}
+.table thead th {
+    padding: 0.7rem 1.25rem;
+    text-align: left;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #94a3b8;
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+    white-space: nowrap;
+}
+.table tbody td {
+    padding: 0.8rem 1.25rem;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: middle;
+}
+.table tbody tr:last-child td { border-bottom: 0; }
+.table tbody tr { transition: background-color .1s ease; }
+.table tbody tr:hover { background: #f8fafc; }
+.dark .table thead th { background: #0d1626; border-bottom-color: #1e293b; color: #64748b; }
+.dark .table tbody td { border-bottom-color: #1b2942; }
+.dark .table tbody tr:hover { background: #0d1626; }
+
+/* Pagination buttons */
+.page-btn {
+    display: grid;
+    place-items: center;
+    min-width: 2rem;
+    height: 2rem;
+    padding: 0 0.4rem;
+    border-radius: 0.5rem;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #475569;
+    transition: background-color .12s ease, border-color .12s ease;
+}
+.page-btn:hover { background: #f1f5f9; border-color: #cbd5e1; }
+.dark .page-btn { background: #1e293b; border-color: #334155; color: #cbd5e1; }
+.dark .page-btn:hover { background: #273449; }
+
+/* --------------------------------------------------------------------------
+   Scrollbars (webkit)
+   -------------------------------------------------------------------------- */
+.scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+.scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+.scrollbar-thin::-webkit-scrollbar-thumb { background: rgb(148 163 184 / .35); border-radius: 9999px; }
+.scrollbar-thin::-webkit-scrollbar-thumb:hover { background: rgb(148 163 184 / .6); }
+
+/* --------------------------------------------------------------------------
+   Selectable option cards (roles in user form, permissions in role form)
+   -------------------------------------------------------------------------- */
+.role-option,
+.perm-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.625rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.625rem;
+    padding: 0.625rem 0.75rem;
+    cursor: pointer;
+    transition: border-color .12s ease, background-color .12s ease;
+}
+.role-option:hover, .perm-option:hover { border-color: #99d6cf; }
+.role-option:has(input:checked), .perm-option:has(input:checked) {
+    border-color: #14b8a6;
+    background: rgba(20, 184, 166, .06);
+}
+.dark .role-option, .dark .perm-option { border-color: #334155; }
+.dark .role-option:hover, .dark .perm-option:hover { border-color: #2c5a54; }
+
+/* --------------------------------------------------------------------------
+   Charts — transparent grid so cards stay clean in both themes
+   -------------------------------------------------------------------------- */
+.chartjs-tooltip {
+    background: rgba(11, 31, 58, .92) !important;
+    border-radius: 8px !important;
+    color: #fff;
+}

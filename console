@@ -1,0 +1,268 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * MediCore console — the single CLI entry point for database and
+ * maintenance tasks.
+ *
+ *   php console migrate            Run pending migrations
+ *   php console migrate:status     List applied/pending migrations
+ *   php console migrate:rollback   Roll back the last batch
+ *   php console db:create          Create the database if it does not exist
+ *   php console seed               Run all seeders (demo data)
+ *   php console fresh              Drop everything, migrate + seed
+ *   php console serve [--port=N]   Start the built-in dev server
+ *   php console test               Run the test suite
+ *   php console key:generate       Print a random APP_KEY
+ *   php console status             Environment & database health report
+ *   php console help               Show this list
+ */
+
+require __DIR__ . '/bootstrap/app.php';
+
+use App\Core\Config;
+use App\Core\Database;
+use App\Core\Logger;
+use App\Core\Migrator;
+use Seeders\AuditLogSeeder;
+use Seeders\PatientSeeder;
+use Seeders\PermissionSeeder;
+use Seeders\RolePermissionSeeder;
+use Seeders\RoleSeeder;
+use Seeders\SettingSeeder;
+use Seeders\UserSeeder;
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+/** @param array<int, string> $lines */
+function say(array|string $lines, int $exit = 0): never
+{
+    foreach ((array) $lines as $line) {
+        echo $line . PHP_EOL;
+    }
+    exit($exit);
+}
+
+function seeders(): array
+{
+    // Seeder files are outside the PSR-4 App\ map — load them explicitly.
+    // Base class first: children extend it at require-time.
+    require_once __DIR__ . '/database/seeders/Seeder.php';
+    foreach (glob(__DIR__ . '/database/seeders/*.php') ?: [] as $file) {
+        require_once $file;
+    }
+
+    $all = [
+        RoleSeeder::class,
+        PermissionSeeder::class,
+        RolePermissionSeeder::class,
+        UserSeeder::class,
+        SettingSeeder::class,
+        PatientSeeder::class,
+        AuditLogSeeder::class,
+    ];
+    usort($all, static fn (string $a, string $b): int => $a::order() <=> $b::order());
+    return $all;
+}
+
+function ensureDatabaseExists(): void
+{
+    $name = (string) Config::get('database.database');
+    $dsn = sprintf(
+        'mysql:host=%s;port=%d;charset=%s',
+        (string) Config::get('database.host'),
+        (int) Config::get('database.port'),
+        (string) Config::get('database.charset')
+    );
+    try {
+        $pdo = new PDO($dsn, (string) Config::get('database.username'), (string) Config::get('database.password'), [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        ]);
+        $pdo->exec(
+            "CREATE DATABASE IF NOT EXISTS `{$name}`
+             CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+        );
+    } catch (PDOException $e) {
+        say(['✗ Could not create database: ' . $e->getMessage()], 1);
+    }
+}
+
+$command = $argv[1] ?? 'help';
+$option = $argv[2] ?? null;
+
+// ---------------------------------------------------------------------------
+// Commands
+// ---------------------------------------------------------------------------
+switch ($command) {
+    case 'migrate':
+        ensureDatabaseExists();
+        $result = Migrator::make()->migrate();
+        if ($result['ran'] === []) {
+            say('✓ Nothing to migrate — database is up to date.');
+        }
+        foreach ($result['ran'] as $name) {
+            echo "✓ MIGRATED  {$name}" . PHP_EOL;
+        }
+        say('Done (' . count($result['ran']) . ' migration(s), batch ' . $result['batch'] . ').');
+        // no break — say() exits
+
+    case 'migrate:status':
+        ensureDatabaseExists();
+        $status = Migrator::make()->status();
+        $pendingCount = 0;
+        foreach ($status as $name => $info) {
+            $flag = $info['applied'] ? '✓' : '…';
+            $batch = $info['batch'] !== null ? " (batch {$info['batch']})" : '';
+            echo "  {$flag} {$name}{$batch}" . PHP_EOL;
+            if (!$info['applied']) {
+                $pendingCount++;
+            }
+        }
+        say($pendingCount === 0 ? 'All migrations applied.' : "{$pendingCount} migration(s) pending.");
+
+    case 'migrate:rollback':
+        ensureDatabaseExists();
+        $rolled = Migrator::make()->rollback();
+        foreach ($rolled as $name) {
+            echo "↩ ROLLED BACK  {$name}" . PHP_EOL;
+        }
+        say($rolled === [] ? 'Nothing to roll back.' : 'Done.');
+
+    case 'db:create':
+        ensureDatabaseExists();
+        say('✓ Database "' . Config::get('database.database') . '" is ready.');
+
+    case 'seed': {
+        ensureDatabaseExists();
+        if (!Database::tableExists('roles')) {
+            say(['✗ Foundation tables missing. Run `php console migrate` first.'], 1);
+        }
+        foreach (seeders() as $class) {
+            $class::run(Database::pdo());
+            echo '✓ SEEDED   ' . $class::label() . PHP_EOL;
+        }
+        Logger::info('Database seeded via console.');
+        say('Demo data restored (users password: Admin@12345 / Staff@12345).');
+    }
+
+    case 'fresh':
+        ensureDatabaseExists();
+        $migrator = Migrator::make();
+        $migrator->dropAllTables();
+        echo '✓ Dropped all tables' . PHP_EOL;
+        $result = $migrator->migrate();
+        foreach ($result['ran'] as $name) {
+            echo "✓ MIGRATED  {$name}" . PHP_EOL;
+        }
+        foreach (seeders() as $class) {
+            $class::run(Database::pdo());
+            echo '✓ SEEDED   ' . $class::label() . PHP_EOL;
+        }
+        say('Fresh install complete.');
+
+    case 'serve': {
+        $port = 8090;
+        if (is_string($option) && preg_match('/^--port=(\d+)$/', $option, $m)) {
+            $port = (int) $m[1];
+        }
+        $host = '127.0.0.1';
+        $docroot = str_replace('\\', '/', __DIR__ . '/public');
+
+        echo PHP_EOL
+            . "  MediCore dev server" . PHP_EOL
+            . "  → http://{$host}:{$port}" . PHP_EOL
+            . '  → Document root: public/ (never point the docroot at the project root)' . PHP_EOL
+            . '  → Press Ctrl+C to stop' . PHP_EOL . PHP_EOL;
+
+        // proc_open with an argument array bypasses the shell entirely —
+        // quoting headaches on Windows disappear.
+        $process = proc_open(
+            [PHP_BINARY, '-S', "{$host}:{$port}", '-t', $docroot, $docroot . '/index.php'],
+            [0 => STDIN, 1 => STDOUT, 2 => STDERR],
+            $pipes
+        );
+        if (!is_resource($process)) {
+            say(['✗ Could not start the PHP dev server.'], 1);
+        }
+        register_shutdown_function(static function () use ($process): void {
+            proc_terminate($process);
+        });
+        while (true) {
+            $status = proc_get_status($process);
+            if (!$status['running']) {
+                exit((int) $status['exitcode']);
+            }
+            sleep(1);
+        }
+    }
+
+    case 'test':
+        passthru('php ' . escapeshellarg(__DIR__ . '/tests/run.php'), $code);
+        exit($code);
+
+    case 'auth:purge': {
+        ensureDatabaseExists();
+        if (!Database::tableExists('login_attempts')) {
+            say('✗ Auth tables missing. Run `php console migrate` first.', 1);
+        }
+        $attempts = \App\Models\LoginAttempt::purgeOlderThanDays(90);
+        $tokens = \App\Models\PasswordReset::purgeConsumed();
+        Logger::info('auth:purge executed', ['attempts' => $attempts, 'tokens' => $tokens]);
+        say("✓ Purged {$attempts} login attempt(s) older than 90 days and {$tokens} consumed/expired reset token(s).");
+    }
+
+    case 'key:generate':
+        say('base64:' . base64_encode(bin2hex(random_bytes(24))));
+
+    case 'status': {
+        ensureDatabaseExists();
+        echo '  App:      ' . Config::get('app.name') . ' v' . Config::get('app.version') . PHP_EOL;
+        echo '  Env:      ' . Config::get('app.env') . (Config::get('app.debug') ? ' (debug ON)' : ' (debug off)') . PHP_EOL;
+        echo '  PHP:      ' . PHP_VERSION . PHP_EOL;
+
+        $start = microtime(true);
+        Database::scalar('SELECT 1');
+        $latency = round((microtime(true) - $start) * 1000, 1);
+        echo '  Database: connected to ' . Config::get('database.database') . " ({$latency} ms)" . PHP_EOL;
+
+        $status = Migrator::make()->status();
+        $applied = count(array_filter($status, static fn ($i) => $i['applied']));
+        $pending = count($status) - $applied;
+        echo "  Migrations: {$applied} applied, {$pending} pending" . PHP_EOL;
+
+        foreach (['users', 'roles', 'permissions', 'hospital_settings', 'audit_logs'] as $table) {
+            if (Database::tableExists($table)) {
+                $count = (int) Database::scalar("SELECT COUNT(*) FROM `{$table}`");
+                printf("  %-18s %d rows%s\n", $table, $count, $count === 0 ? '  (empty — run `php console seed`)' : '');
+            } else {
+                printf("  %-18s missing\n", $table);
+            }
+        }
+
+        $logs = is_dir(BASE_PATH . '/storage/logs') ? 'writable' : 'MISSING';
+        echo "  Storage:  logs {$logs}" . PHP_EOL;
+        exit(0);
+    }
+
+    case 'help':
+    default:
+        say([
+            '',
+            '  MediCore console — commands',
+            '',
+            '  migrate            Run pending migrations',
+            '  migrate:status     List migrations with applied state',
+            '  migrate:rollback   Roll back the last batch',
+            '  db:create          Create the database (if missing)',
+            '  seed               Restore demo data',
+            '  fresh              Drop everything, migrate + seed',
+            '  serve              Dev server (default port 8090, --port=N)',
+            '  test               Run the test suite',
+            '  auth:purge         Purge old login attempts & used reset tokens',
+            '  key:generate       Print a random APP_KEY',
+            '  status             Health report',
+            '',
+        ]);
+}

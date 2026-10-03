@@ -1,0 +1,22 @@
+# MediCore public/.htaccess — front controller routing for Apache.
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Send every request that is not a real file/dir to index.php.
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^ index.php [L]
+</IfModule>
+
+# Block dotfiles (.env, .git, ...) inside the docroot.
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
+
+# Basic hardening headers (PHP layer adds the full set).
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "DENY"
+</IfModule>

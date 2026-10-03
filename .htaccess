@@ -1,0 +1,10 @@
+# MediCore root .htaccess — everything is served from /public.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
+
+# Never serve these files even if the rewrite is bypassed.
+<FilesMatch "^\.env|composer\.(json|lock)|console$">
+    Require all denied
+</FilesMatch>
