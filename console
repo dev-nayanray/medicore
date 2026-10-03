@@ -310,6 +310,61 @@ switch ($command) {
         say("✓ Purged {$attempts} login attempt(s) older than 90 days and {$tokens} consumed/expired reset token(s).");
     }
 
+    case 'auth:repair': {
+        // Re-seed roles, permissions, and role-permission mappings + assign super-admin to the first admin user.
+        ensureDatabaseExists();
+        if (!Database::tableExists('roles')) {
+            say('✗ Roles table missing. Run `php console migrate` first.', 1);
+        }
+
+        // Load seeders
+        require_once __DIR__ . '/database/seeders/Seeder.php';
+        foreach (glob(__DIR__ . '/database/seeders/*.php') ?: [] as $f) {
+            require_once $f;
+        }
+
+        echo 'Re-seeding roles...' . PHP_EOL;
+        \Seeders\RoleSeeder::run(Database::pdo());
+        echo '✓ Roles seeded.' . PHP_EOL;
+
+        echo 'Re-seeding permissions...' . PHP_EOL;
+        \Seeders\PermissionSeeder::run(Database::pdo());
+        echo '✓ Permissions seeded.' . PHP_EOL;
+
+        echo 'Re-seeding role-permission mappings...' . PHP_EOL;
+        \Seeders\RolePermissionSeeder::run(Database::pdo());
+        echo '✓ Role-permission mappings seeded.' . PHP_EOL;
+
+        // Ensure the admin user has the super-admin role.
+        $adminEmail = 'admin@medicore.test';
+        $adminId = (int) Database::scalar('SELECT id FROM users WHERE email = ?', [$adminEmail]);
+        if ($adminId > 0) {
+            $superAdminRoleId = (int) Database::scalar("SELECT id FROM roles WHERE slug = 'super-admin'");
+            if ($superAdminRoleId > 0) {
+                Database::execute('INSERT IGNORE INTO role_user (user_id, role_id) VALUES (?, ?)', [$adminId, $superAdminRoleId]);
+                echo "✓ Assigned super-admin role to {$adminEmail} (user #{$adminId})." . PHP_EOL;
+            } else {
+                echo '✗ super-admin role not found in roles table!' . PHP_EOL;
+            }
+        } else {
+            echo "✗ Admin user {$adminEmail} not found. Run `php console seed` first." . PHP_EOL;
+        }
+
+        // Also ensure the administrator role has users.* permissions.
+        $adminRoleId = (int) Database::scalar("SELECT id FROM roles WHERE slug = 'administrator'");
+        if ($adminRoleId > 0) {
+            $permIds = Database::query("SELECT id FROM permissions WHERE module IN ('users','roles','settings','audit','reports','patients','appointments','doctors','departments','staff','consultations','prescriptions','billing','payments','expenses','pharmacy','laboratory','inventory','admissions','beds')");
+            foreach ($permIds as $p) {
+                Database::execute('INSERT IGNORE INTO permission_role (permission_id, role_id) VALUES (?, ?)', [(int) $p['id'], $adminRoleId]);
+            }
+            echo "✓ Granted all permissions to administrator role." . PHP_EOL;
+        }
+
+        echo PHP_EOL . '✓ Auth repair complete. Log out and log back in for changes to take effect.' . PHP_EOL;
+        echo '  (Or the session will auto-refresh within 5 minutes via Auth::PERMISSION_TTL).' . PHP_EOL;
+        exit(0);
+    }
+
     case 'key:generate':
         say('base64:' . base64_encode(bin2hex(random_bytes(24))));
 
@@ -358,6 +413,7 @@ switch ($command) {
             '  serve              Dev server (default port 8090, --port=N)',
             '  test               Run the test suite',
             '  auth:purge         Purge old login attempts & used reset tokens',
+            '  auth:repair        Re-seed roles/permissions + assign super-admin to admin user',
             '  notifications:process  Generate alerts (low-stock, expiry, lab pending) + send reminders',
             '  key:generate       Print a random APP_KEY',
             '  status             Health report',

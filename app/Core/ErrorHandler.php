@@ -79,7 +79,11 @@ final class ErrorHandler
             return;
         }
 
-        $view = $e instanceof HttpException && $e->getStatusCode() === 404 ? 'errors/404' : 'errors/500';
+        $view = match (true) {
+            $e instanceof HttpException && $e->getStatusCode() === 404 => 'errors/404',
+            $e instanceof HttpException && $e->getStatusCode() === 403 => 'errors/403',
+            default => 'errors/500',
+        };
         $data = [
             'code'    => self::statusCode($e),
             'debug'   => $debug,
