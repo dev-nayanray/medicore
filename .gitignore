@@ -17,6 +17,9 @@
 !/storage/uploads/departments/
 /storage/uploads/departments/*
 !/storage/uploads/departments/.gitkeep
+!/storage/uploads/consultations/
+/storage/uploads/consultations/*
+!/storage/uploads/consultations/.gitkeep
 public/uploads/*
 !public/uploads/.gitkeep
 .phpunit.result.cache

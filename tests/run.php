@@ -26,19 +26,23 @@ use App\Core\Session;
 use App\Core\Validator;
 use App\Core\View;
 use App\Models\Appointment;
+use App\Models\Consultation;
 use App\Models\Department;
 use App\Models\Doctor;
 use App\Models\Patient;
+use App\Models\Prescription;
 use App\Models\Role;
 use App\Models\StaffProfile;
 use App\Models\User;
 use App\Services\AppointmentService;
 use App\Services\AuthService;
+use App\Services\ConsultationService;
 use App\Services\DashboardService;
 use App\Services\DepartmentService;
 use App\Services\DoctorService;
 use App\Services\PasswordResetService;
 use App\Services\PatientService;
+use App\Services\PrescriptionService;
 use App\Services\SearchService;
 use App\Services\SettingService;
 use App\Services\StaffService;
@@ -1404,6 +1408,247 @@ test('Search: appointments appear in global results', static function () {
     $results = SearchService::search('APT-');
     $groups = array_column($results['groups'], null, 'label');
     expectTrue(isset($groups['Appointments']), 'appointment results should appear for "APT-"');
+});
+
+// ---------------------------------------------------------------------------
+// Phase 6 — Consultation, Clinical Records & Prescriptions
+// ---------------------------------------------------------------------------
+require_once BASE_PATH . '/database/seeders/ConsultationSeeder.php';
+
+// Deterministic slate for phase 6 tests.
+Database::execute('DELETE FROM prescription_items');
+Database::execute('DELETE FROM prescriptions');
+Database::execute('DELETE FROM consultation_amendments');
+Database::execute('DELETE FROM consultation_attachments');
+Database::execute('DELETE FROM consultations');
+\Seeders\ConsultationSeeder::run(Database::pdo());
+
+test('Consultation: code generation is collision-safe', static function () {
+    $codes = [];
+    for ($i = 0; $i < 3; $i++) {
+        $codes[] = Consultation::nextCode();
+    }
+    expect(count(array_unique($codes)), 3, 'codes must be unique');
+    foreach ($codes as $code) {
+        expectTrue(preg_match('/^CON-\d{4}-\d{5}$/', $code) === 1, "bad code: {$code}");
+    }
+});
+
+test('Consultation: create + update draft + finalize lifecycle', static function () {
+    Session::start();
+    Auth::login(User::findByEmail('admin@medicore.test'));
+    $request = new Request();
+
+    $patientId = (int) Database::scalar('SELECT id FROM patients LIMIT 1');
+    $doctorId = (int) Database::scalar("SELECT id FROM doctors WHERE archived_at IS NULL LIMIT 1");
+    expectTrue($patientId > 0 && $doctorId > 0, 'need a patient and a doctor');
+
+    // Create.
+    $r = ConsultationService::create([
+        'patient_id' => $patientId, 'doctor_id' => $doctorId,
+        'chief_complaint' => 'Test complaint', 'symptoms' => 'Test symptoms',
+        'diagnoses' => 'Test diagnosis', 'clinical_notes' => 'Test notes',
+        'temperature' => 37.0, 'bp_systolic' => 120, 'bp_diastolic' => 80,
+        'weight' => 70, 'height' => 170,
+    ], $request);
+    expectTrue($r['ok'], 'consultation creation should succeed');
+    $id = (int) $r['id'];
+
+    $con = Consultation::find($id);
+    expectTrue($con['status'] === 'draft', 'new consultation should be draft');
+    expectTrue($con['bmi'] !== null, 'BMI should be auto-calculated from weight + height');
+
+    // Update draft.
+    $r2 = ConsultationService::update($id, [
+        'chief_complaint' => 'Updated complaint', 'diagnoses' => 'Updated dx',
+    ], $request);
+    expectTrue($r2['ok']);
+    expect(Consultation::find($id)['chief_complaint'], 'Updated complaint');
+
+    // Finalize.
+    $r3 = ConsultationService::finalize($id, $request);
+    expectTrue($r3['ok']);
+    $con = Consultation::find($id);
+    expectTrue($con['status'] === 'finalized', 'should be finalized');
+    expectTrue($con['finalized_at'] !== null, 'finalized_at should be stamped');
+
+    // Cannot update a finalized consultation directly.
+    $r4 = ConsultationService::update($id, ['chief_complaint' => 'Hack attempt'], $request);
+    expectTrue(!$r4['ok'], 'finalized consultation should reject direct edit');
+
+    // Cannot finalize twice.
+    $r5 = ConsultationService::finalize($id, $request);
+    expectTrue(!$r5['ok'], 'cannot finalize twice');
+
+    Database::execute('DELETE FROM consultations WHERE id = ?', [$id]);
+    Auth::logout();
+});
+
+test('Consultation: amendment records the change + reason', static function () {
+    Session::start();
+    Auth::login(User::findByEmail('admin@medicore.test'));
+    $request = new Request();
+
+    // Use a finalized consultation from the seeder.
+    $con = Database::queryOne("SELECT * FROM consultations WHERE status = 'finalized' LIMIT 1");
+    expectTrue($con !== null, 'need at least one finalized consultation');
+    $id = (int) $con['id'];
+    $oldValue = (string) $con['chief_complaint'];
+
+    $r = ConsultationService::amend($id, [
+        'field' => 'chief_complaint', 'value' => 'Amended complaint', 'reason' => 'Typo in original complaint',
+    ], $request);
+    expectTrue($r['ok']);
+
+    $fresh = Consultation::find($id);
+    expectTrue($fresh['status'] === 'amended', 'status should become amended');
+    expect($fresh['chief_complaint'], 'Amended complaint');
+
+    $amendments = Database::query('SELECT * FROM consultation_amendments WHERE consultation_id = ?', [$id]);
+    expectTrue(count($amendments) >= 1, 'amendment should be recorded');
+    expectTrue($amendments[0]['reason'] === 'Typo in original complaint', 'reason should be stored');
+    expectTrue($amendments[0]['old_value'] === $oldValue, 'old value should be recorded');
+
+    Auth::logout();
+});
+
+test('Consultation: cannot amend a draft', static function () {
+    Session::start();
+    Auth::login(User::findByEmail('admin@medicore.test'));
+    $request = new Request();
+
+    $con = Database::queryOne("SELECT * FROM consultations WHERE status = 'draft' LIMIT 1");
+    if ($con === null) {
+        // Create one.
+        $patientId = (int) Database::scalar('SELECT id FROM patients LIMIT 1');
+        $doctorId = (int) Database::scalar("SELECT id FROM doctors WHERE archived_at IS NULL LIMIT 1");
+        $r = ConsultationService::create(['patient_id' => $patientId, 'doctor_id' => $doctorId, 'chief_complaint' => 'Draft test'], $request);
+        $id = (int) $r['id'];
+    } else {
+        $id = (int) $con['id'];
+    }
+
+    $r = ConsultationService::amend($id, ['field' => 'chief_complaint', 'value' => 'X', 'reason' => 'Test'], $request);
+    expectTrue(!$r['ok'], 'cannot amend a draft — should finalize first');
+
+    Auth::logout();
+});
+
+test('Prescription: create from consultation + finalize', static function () {
+    Session::start();
+    Auth::login(User::findByEmail('admin@medicore.test'));
+    $request = new Request();
+
+    // Create a fresh consultation + finalize it (prescriptions require finalized consultation).
+    $patientId = (int) Database::scalar('SELECT id FROM patients LIMIT 1');
+    $doctorId = (int) Database::scalar("SELECT id FROM doctors WHERE archived_at IS NULL LIMIT 1");
+    $r = ConsultationService::create([
+        'patient_id' => $patientId, 'doctor_id' => $doctorId,
+        'chief_complaint' => 'Rx test complaint', 'diagnoses' => 'Rx test dx',
+    ], $request);
+    $conId = (int) $r['id'];
+    ConsultationService::finalize($conId, $request);
+
+    // Create prescription with items.
+    $items = [
+        ['medicine_name' => 'Paracetamol', 'dosage' => '500mg', 'frequency' => 'TDS', 'duration' => '5 days', 'quantity' => 15, 'instructions' => 'After meals'],
+        ['medicine_name' => 'Omeprazole', 'dosage' => '20mg', 'frequency' => 'OD', 'duration' => '7 days', 'quantity' => 7, 'instructions' => 'Before breakfast'],
+    ];
+    $r2 = PrescriptionService::create($conId, $items, 'Take with water', $request);
+    expectTrue($r2['ok'], 'prescription creation should succeed');
+    $rxId = (int) $r2['id'];
+
+    $rx = Prescription::find($rxId);
+    expectTrue($rx['status'] === 'draft', 'new prescription should be draft');
+
+    // Cannot finalize prescription while consultation is finalized (it is) → should work.
+    $r3 = PrescriptionService::finalize($rxId, $request);
+    expectTrue($r3['ok'], 'prescription finalize should succeed when consultation is finalized');
+
+    $rx = Prescription::find($rxId);
+    expectTrue($rx['status'] === 'finalized');
+
+    // Cannot edit a finalized prescription.
+    $r4 = PrescriptionService::update($rxId, $items, 'Changed notes', $request);
+    expectTrue(!$r4['ok'], 'cannot edit a finalized prescription');
+
+    // Cannot create a second prescription for the same consultation.
+    $r5 = PrescriptionService::create($conId, $items, null, $request);
+    expectTrue(!$r5['ok'], 'only one prescription per consultation');
+
+    Database::execute('DELETE FROM prescriptions WHERE id = ?', [$rxId]);
+    Database::execute('DELETE FROM consultations WHERE id = ?', [$conId]);
+    Auth::logout();
+});
+
+test('Prescription: cannot finalize without items', static function () {
+    Session::start();
+    Auth::login(User::findByEmail('admin@medicore.test'));
+    $request = new Request();
+
+    $patientId = (int) Database::scalar('SELECT id FROM patients LIMIT 1');
+    $doctorId = (int) Database::scalar("SELECT id FROM doctors WHERE archived_at IS NULL LIMIT 1");
+    $r = ConsultationService::create(['patient_id' => $patientId, 'doctor_id' => $doctorId, 'chief_complaint' => 'Empty Rx test'], $request);
+    $conId = (int) $r['id'];
+    ConsultationService::finalize($conId, $request);
+
+    // Create with no items → should fail.
+    $r2 = PrescriptionService::create($conId, [], null, $request);
+    expectTrue(!$r2['ok'], 'prescription creation should fail with no items');
+
+    Database::execute('DELETE FROM consultations WHERE id = ?', [$conId]);
+    Auth::logout();
+});
+
+test('Access control: clinical permissions', static function () {
+    Session::start();
+
+    // Doctor has full clinical access.
+    Auth::login(User::findByEmail('sarah.chen@medicore.test'));
+    expectTrue(Auth::can('consultations.create'));
+    expectTrue(Auth::can('consultations.finalize'));
+    expectTrue(Auth::can('prescriptions.create'));
+    Auth::logout();
+
+    // Nurse has view-only clinical access.
+    Auth::login(User::findByEmail('farhana@medicore.test'));
+    expectTrue(Auth::can('consultations.view'), 'nurse can view consultations');
+    expectTrue(!Auth::can('consultations.create'), 'nurse cannot create consultations');
+    expectTrue(Auth::can('prescriptions.view'), 'nurse can view prescriptions');
+    expectTrue(!Auth::can('prescriptions.create'), 'nurse cannot create prescriptions');
+    Auth::logout();
+
+    // Pharmacist can view + finalize prescriptions (dispensing).
+    Auth::login(User::findByEmail('nusrat@medicore.test'));
+    expectTrue(Auth::can('prescriptions.view'), 'pharmacist can view prescriptions');
+    expectTrue(Auth::can('prescriptions.finalize'), 'pharmacist can finalize prescriptions');
+    expectTrue(!Auth::can('consultations.create'), 'pharmacist cannot create consultations');
+    Auth::logout();
+
+    // Accountant has no clinical access.
+    Auth::login(User::findByEmail('mahin@medicore.test'));
+    expectTrue(!Auth::can('consultations.view'), 'accountant has no clinical access');
+    expectTrue(!Auth::can('prescriptions.view'));
+    Auth::logout();
+});
+
+test('Consultation: patient history timeline', static function () {
+    $patientId = (int) Database::scalar('SELECT patient_id FROM consultations LIMIT 1');
+    $history = Consultation::forPatient($patientId);
+    expectTrue(count($history) >= 1, 'should have at least one consultation in history');
+});
+
+test('Dashboard: clinical modules marked installed', static function () {
+    $data = DashboardService::build();
+    $modules = array_column($data['modules'], 'ready', 'name');
+    expectTrue(($modules['Consultations'] ?? null) === true, 'Consultations module should be marked installed');
+    expectTrue(($modules['Prescriptions'] ?? null) === true, 'Prescriptions module should be marked installed');
+});
+
+test('Search: consultations appear in global results', static function () {
+    $results = SearchService::search('CON-');
+    $groups = array_column($results['groups'], null, 'label');
+    expectTrue(isset($groups['Consultations']), 'consultation results should appear for "CON-"');
 });
 
 // ---------------------------------------------------------------------------

@@ -265,6 +265,8 @@ final class DashboardService
             ['name' => 'Doctors',         'table' => 'doctors'],
             ['name' => 'Departments',     'table' => 'departments'],
             ['name' => 'Staff',           'table' => 'staff_profiles'],
+            ['name' => 'Consultations',   'table' => 'consultations'],
+            ['name' => 'Prescriptions',   'table' => 'prescriptions'],
             ['name' => 'Bed management',  'table' => 'beds'],
             ['name' => 'Laboratory',      'table' => 'lab_tests'],
             ['name' => 'Pharmacy',        'table' => 'medicines'],

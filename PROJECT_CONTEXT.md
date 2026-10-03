@@ -1,7 +1,7 @@
 # PROJECT_CONTEXT — MediCore HMS
 
 > **Purpose:** the durable architecture contract for every future phase.
-> Read this before adding any module. Last updated: Phase 5 (appointments & queue).
+> Read this before adding any module. Last updated: Phase 6 (consultations & prescriptions).
 
 ---
 
@@ -174,6 +174,7 @@ backing table exists (`DashboardService::moduleStatus()` + stat guards):
 | ~~Departments~~ | `departments` | departments.view/create/update/delete | ✅ Phase 4 |
 | ~~Staff~~ | `staff_profiles`, `staff_shifts`, `staff_attendance`, `staff_leaves` | staff.view/create/update/delete | ✅ Phase 4 |
 | ~~Appointments~~ | `appointments`, `appointment_reminders` | appointments.view/create/update/delete/approve | ✅ Phase 5 |
+| ~~Consultations~~ | `consultations`, `prescriptions`, `prescription_items`, `consultation_attachments`, `consultation_amendments` | consultations.view/create/update/finalize/amend, prescriptions.view/create/update/finalize | ✅ Phase 6 |
 | Bed management | `beds` | beds.view/update | ⏳ |
 | Laboratory | `lab_tests` | laboratory.* (incl. approve) | ⏳ |
 | Pharmacy | `medicines` | pharmacy.* | ⏳ |
@@ -288,7 +289,7 @@ public/index.php (sole web entry point)
 8. Add audit logging to every write action.
 9. Extend `tests/run.php` with module tests; run `php console test`.
 
-## 7. Known limitations (accepted through phase 5)
+## 7. Known limitations (accepted through phase 6)
 
 - Deactivating/archiving a user does not kill their live session instantly;
   it lands on the next 5-minute snapshot re-sync or their next request after
@@ -401,6 +402,75 @@ public/index.php (sole web entry point)
   DB schema and service contract stay unchanged. Reschedule cancels
   pending reminders and schedules a new one for the new date. Cancel
   cancels pending reminders too.
+
+### ✅ Phase 6 — Consultation, Clinical Records & Prescriptions (COMPLETE, verified 2026-10-04)
+
+| Area | State |
+|---|---|
+| Create consultations from appointments or walk-in visits | ✅ Live |
+| Record symptoms, observations, vitals, clinical notes, diagnoses | ✅ Live |
+| Vitals: temp, BP (systolic/diastolic), pulse, resp rate, SpO₂, weight, height, auto-BMI | ✅ Live |
+| Patient consultation history (timeline) | ✅ Live |
+| Digital prescriptions with medicines, dosage, frequency, duration, quantity, instructions | ✅ Live |
+| Follow-up dates and referrals (to specialist/department + reason) | ✅ Live |
+| Printable prescription with hospital branding, patient details, allergies banner | ✅ Live |
+| Draft → finalized lifecycle for consultations + prescriptions | ✅ Live |
+| Finalized records are immutable — corrections require formal amendments | ✅ Live |
+| Clinical record amendment history (field, old value, new value, reason, authorizer) | ✅ Live |
+| Secure clinical attachments (PDF/JPG/PNG, MIME-sniffed, private storage, gated downloads) | ✅ Live |
+| Doctor workspace (today's consultations, summary tiles, quick actions) | ✅ Live |
+| Patient summary sidebar (demographics, allergies, vitals, recent history) | ✅ Live |
+| Dynamic prescription builder (Alpine.js — add/remove medicine rows inline) | ✅ Live |
+| Audit coverage: created / updated / finalized / amended / attachment uploaded/downloaded/deleted / prescription created/updated/finalized/printed | ✅ Live |
+| Role-based clinical access: consultations.view/create/update/finalize/amend, prescriptions.view/create/update/finalize | ✅ Live |
+| Sidebar Clinical section (Workspace + Consultations) | ✅ Live |
+| Dashboard: clinical workspace quick-action button, module registry marks Consultations + Prescriptions installed | ✅ Live |
+| Global search returns consultation results (permission-gated) | ✅ Live |
+| Test suite: 9 new assertions covering code gen, create/update/finalize, amendment, cannot amend draft, prescription create/finalize, no-empty-prescription, access control, patient history, dashboard registry, search | ✅ Live |
+
+**Key mechanics to preserve:**
+
+- **Draft → Finalized lifecycle:** consultations start as `draft` (editable).
+  `ConsultationService::finalize()` stamps `finalized_at` + `finalized_by`
+  and flips `status` to `finalized`. Once finalized, `update()` returns an
+  error — corrections must go through `amend()`. If the consultation is
+  linked to an appointment, finalizing also marks the appointment as
+  `completed`.
+- **Amendment trail:** `ConsultationService::amend()` records the old value,
+  new value, reason, and authorizing user in `consultation_amendments`
+  BEFORE applying the change. The consultation status becomes `amended`.
+  Only finalized/amended consultations can be amended. A reason is always
+  required (minimum 5 chars). The amendable fields are whitelisted (clinical
+  text fields + vitals).
+- **Prescription 1:1 with consultation:** the `prescriptions` table has a
+  unique constraint on `consultation_id` — only one prescription per
+  consultation. `PrescriptionService::create()` checks for an existing
+  prescription first.
+- **Prescription finalization gate:** `PrescriptionService::finalize()`
+  requires the parent consultation to be finalized first (prevents
+  finalizing a prescription against an unfinalized diagnosis). It also
+  requires at least one medicine item. Finalized prescriptions are
+  immutable — `update()` returns an error.
+- **Prescription items replacement:** `PrescriptionService::replaceItems()`
+  deletes all existing items then inserts the new set. This makes the
+  prescription builder on the UI a simple "replace all" pattern — the
+  Alpine.js form submits all rows every time.
+- **Auto-BMI calculation:** `ConsultationService::normalizeVitals()`
+  auto-calculates BMI from weight + height when both are present
+  (weight[kg] / (height[m])²). The BMI column is read-only on the form.
+- **Clinical attachments pipeline:** same secure pattern as patient
+  documents — extension whitelist (PDF/JPG/PNG/WebP) + `finfo` MIME sniff
+  + size cap (10 MB) + random stored name in
+  `storage/uploads/consultations/`. Downloads stream through a
+  permission-gated controller with `nosniff` + `Content-Disposition:
+  inline`. Attachments can only be uploaded/deleted while the consultation
+  is a draft (finalized records lock attachments too).
+- **Clinical permissions:** strict role-based access —
+  `consultations.create/finalize/amend` and `prescriptions.create/finalize`
+  are granted to doctors and administrators only. Nurses get view-only
+  access. Pharmacists get `prescriptions.view` + `prescriptions.finalize`
+  (for dispensing). Receptionists get `consultations.view` (read-only).
+  Accountants have no clinical access at all.
 - Staff shift overlap detection prevents same-day double-booking for one
   staff member, but does not enforce minimum rest between an evening shift
   end and a next-day morning shift start. That gap rule can be added to
@@ -429,3 +499,20 @@ public/index.php (sole web entry point)
   no-show detection (mark as no_show if `checked_in_at` is still NULL
   30 minutes past `start_time`) is not implemented; a scheduled job
   could handle this.
+- Prescription medicine names are free-text (no FK to a medicines
+  table). When the pharmacy module ships, the `medicine_name` column
+  can be cross-referenced or migrated to a FK — the current design
+  keeps the prescription self-contained and does not block on pharmacy.
+- Clinical attachments are stored on the local filesystem under
+  `storage/uploads/consultations/`. For multi-server deployments, swap
+  the `ConsultationService` file operations for an S3-compatible
+  adapter — the DB schema and download controller stay unchanged.
+- The amendment workflow requires a reason but does not require a
+  second-doctor co-sign for high-risk fields (diagnoses, clinical
+  notes). A future policy could add a `co_signed_by` column and gate
+  specific fields behind dual authorization.
+- Consultations link to appointments via an optional FK, but the
+  reverse lookup (appointment → consultation) is not surfaced on the
+  appointment detail page yet. The `appointment_id` on consultations
+  is the authoritative link; the appointment show view can be extended
+  to display the linked consultation when that integration is needed.

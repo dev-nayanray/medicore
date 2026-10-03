@@ -39,6 +39,12 @@ $menu = [
         ],
     ],
     [
+        'label' => 'Clinical', 'items' => [
+            ['key' => 'workspace',    'label' => 'Workspace',     'href' => url('/admin/consultations/workspace'), 'icon' => 'layout-dashboard', 'can' => 'consultations.view', 'soon' => false],
+            ['key' => 'consultations','label' => 'Consultations','href' => url('/admin/consultations'), 'icon' => 'clipboard-list', 'can' => 'consultations.view', 'soon' => false],
+        ],
+    ],
+    [
         'label' => 'Operations', 'items' => [
             ['key' => 'beds',   'label' => 'Bed Management', 'href' => '#', 'icon' => 'bed-double',  'can' => null, 'soon' => true],
             ['key' => 'lab',    'label' => 'Laboratory',     'href' => '#', 'icon' => 'flask-conical','can' => null, 'soon' => true],

@@ -32,6 +32,8 @@ final class PermissionSeeder extends Seeder
             'doctors'     => ['view', 'create', 'update', 'delete'],
             'departments' => ['view', 'create', 'update', 'delete'],
             'staff'       => ['view', 'create', 'update', 'delete'],
+            'consultations' => ['view', 'create', 'update', 'finalize', 'amend'],
+            'prescriptions' => ['view', 'create', 'update', 'finalize'],
             'beds'        => ['view', 'update'],
             'laboratory'  => ['view', 'create', 'update', 'approve'],
             'pharmacy'    => ['view', 'create', 'update'],

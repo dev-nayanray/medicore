@@ -24,23 +24,28 @@ final class RolePermissionSeeder extends Seeder
             'administrator' => [
                 'dashboard.view', 'users.*', 'roles.view', 'settings.*', 'audit.*',
                 'patients.view', 'appointments.*', 'doctors.*', 'departments.*', 'staff.*',
+                'consultations.*', 'prescriptions.*',
                 'beds.view', 'reports.*',
             ],
             'doctor' => [
                 'dashboard.view', 'patients.*', 'appointments.*', 'laboratory.view',
                 'laboratory.update', 'laboratory.approve', 'pharmacy.view', 'reports.view',
                 'staff.view', 'departments.view',
+                'consultations.*', 'prescriptions.*',
             ],
             'nurse' => [
                 'dashboard.view', 'patients.view', 'patients.update', 'appointments.view',
                 'beds.*', 'laboratory.view', 'staff.view', 'departments.view',
+                'consultations.view', 'prescriptions.view',
             ],
             'receptionist' => [
                 'dashboard.view', 'patients.*', 'appointments.*', 'doctors.view',
                 'departments.view', 'staff.view', 'billing.view', 'billing.create', 'payments.view',
+                'consultations.view',
             ],
             'pharmacist' => [
                 'dashboard.view', 'pharmacy.*', 'departments.view',
+                'prescriptions.view', 'prescriptions.finalize',
             ],
             'lab-technician' => [
                 'dashboard.view', 'laboratory.*', 'departments.view',

@@ -37,6 +37,33 @@ final class SearchService
             return ['query' => '', 'groups' => [], 'modules' => [], 'total' => 0];
         }
 
+        // --- Consultations (live module, permission-gated) -------------------
+        if (Database::tableExists('consultations') && \App\Core\Auth::can('consultations.view')) {
+            $like = '%' . $query . '%';
+            $rows = Database::query(
+                "SELECT c.id, c.consultation_code, c.consultation_date, c.chief_complaint,
+                        CONCAT(p.first_name, ' ', p.last_name) AS patient_name
+                 FROM consultations c
+                 LEFT JOIN patients p ON p.id = c.patient_id
+                 WHERE c.consultation_code LIKE ? OR c.chief_complaint LIKE ? OR c.diagnoses LIKE ?
+                    OR p.first_name LIKE ? OR p.last_name LIKE ?
+                 ORDER BY c.consultation_date DESC LIMIT 5",
+                [$like, $like, $like, $like, $like]
+            );
+            if ($rows !== []) {
+                $results = [];
+                foreach ($rows as $row) {
+                    $results[] = [
+                        'title'    => "{$row['consultation_code']} · {$row['patient_name']}",
+                        'subtitle' => 'Consultation · ' . ($row['chief_complaint'] ?: format_date(substr((string) $row['consultation_date'], 0, 10), 'M j, Y')),
+                        'url'      => url('/admin/consultations/' . (int) $row['id']),
+                    ];
+                }
+                $total += count($results);
+                $groups[] = ['label' => 'Consultations', 'icon' => 'clipboard-list', 'results' => $results];
+            }
+        }
+
         // --- Appointments (live module, permission-gated) -------------------
         if (Database::tableExists('appointments') && \App\Core\Auth::can('appointments.view')) {
             $like = '%' . $query . '%';

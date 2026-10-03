@@ -29,6 +29,11 @@ $user = auth_user();
     </div>
 
     <div class="flex flex-wrap items-center gap-2">
+        <?php if (can('consultations.create')): ?>
+            <a href="<?= url('/admin/consultations/workspace') ?>" class="btn btn-secondary">
+                <i data-lucide="stethoscope" class="h-4 w-4"></i><span class="hidden sm:inline">Clinical workspace</span>
+            </a>
+        <?php endif; ?>
         <?php if (can('appointments.create')): ?>
             <a href="<?= url('/admin/appointments/create') ?>" class="btn btn-secondary">
                 <i data-lucide="calendar-plus" class="h-4 w-4"></i><span class="hidden sm:inline">New appointment</span>

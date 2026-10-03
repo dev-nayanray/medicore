@@ -14,8 +14,10 @@ declare(strict_types=1);
 
 use App\Controllers\Admin\AuditLogController;
 use App\Controllers\Admin\AppointmentController;
+use App\Controllers\Admin\ConsultationController;
 use App\Controllers\Admin\DepartmentController;
 use App\Controllers\Admin\DoctorController;
+use App\Controllers\Admin\PrescriptionController;
 use App\Controllers\Admin\StaffController;
 use App\Controllers\Admin\PatientController;
 use App\Controllers\Admin\PermissionController;
@@ -280,6 +282,59 @@ $router->group(['prefix' => '/admin', 'middleware' => ['auth', 'password_current
 
     $r->post('/appointments/{id}/no-show', [AppointmentController::class, 'markNoShow'])
         ->name('appointments.no_show')->middleware('can:appointments.update');
+
+    // --- Consultations & Prescriptions -----------------------------------
+    $r->get('/consultations', [ConsultationController::class, 'index'])
+        ->name('consultations.index')->middleware('can:consultations.view');
+
+    $r->get('/consultations/workspace', [ConsultationController::class, 'workspace'])
+        ->name('consultations.workspace')->middleware('can:consultations.view');
+
+    $r->get('/consultations/create', [ConsultationController::class, 'create'])
+        ->name('consultations.create')->middleware('can:consultations.create');
+
+    $r->post('/consultations', [ConsultationController::class, 'store'])
+        ->name('consultations.store')->middleware('can:consultations.create');
+
+    $r->get('/consultations/{id}', [ConsultationController::class, 'show'])
+        ->name('consultations.show')->middleware('can:consultations.view');
+
+    $r->get('/consultations/{id}/edit', [ConsultationController::class, 'edit'])
+        ->name('consultations.edit')->middleware('can:consultations.update');
+
+    $r->post('/consultations/{id}', [ConsultationController::class, 'update'])
+        ->name('consultations.update')->middleware('can:consultations.update');
+
+    $r->post('/consultations/{id}/finalize', [ConsultationController::class, 'finalize'])
+        ->name('consultations.finalize')->middleware('can:consultations.finalize');
+
+    $r->post('/consultations/{id}/amend', [ConsultationController::class, 'amend'])
+        ->name('consultations.amend')->middleware('can:consultations.amend');
+
+    $r->post('/consultations/{id}/attachments', [ConsultationController::class, 'uploadAttachment'])
+        ->name('consultations.attachments.store')->middleware('can:consultations.update');
+
+    $r->get('/consultations/{id}/attachments/{attId}', [ConsultationController::class, 'downloadAttachment'])
+        ->name('consultations.attachments.download')->middleware('can:consultations.view');
+
+    $r->post('/consultations/{id}/attachments/{attId}/delete', [ConsultationController::class, 'deleteAttachment'])
+        ->name('consultations.attachments.delete')->middleware('can:consultations.update');
+
+    $r->post('/consultations/{id}/prescriptions', [ConsultationController::class, 'storePrescription'])
+        ->name('consultations.prescriptions.store')->middleware('can:prescriptions.create');
+
+    $r->post('/consultations/{id}/prescriptions/{rxId}', [ConsultationController::class, 'updatePrescription'])
+        ->name('consultations.prescriptions.update')->middleware('can:prescriptions.update');
+
+    $r->post('/consultations/{id}/prescriptions/{rxId}/finalize', [ConsultationController::class, 'finalizePrescription'])
+        ->name('consultations.prescriptions.finalize')->middleware('can:prescriptions.finalize');
+
+    // Standalone prescription views (detail + print)
+    $r->get('/prescriptions/{id}', [PrescriptionController::class, 'show'])
+        ->name('prescriptions.show')->middleware('can:prescriptions.view');
+
+    $r->get('/prescriptions/{id}/print', [PrescriptionController::class, 'print'])
+        ->name('prescriptions.print')->middleware('can:prescriptions.view');
 
     // --- Roles & permissions ---------------------------------------------
     $r->get('/roles', [RoleController::class, 'index'])
