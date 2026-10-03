@@ -38,8 +38,7 @@ final class DepartmentSeeder extends Seeder
         $now = strtotime('-2 hours');
         foreach ($departments as $i => $dept) {
             [$name, $desc, $loc, $phone, $email] = $dept;
-            $slug = strtolower(preg_replace('/[^A-Za-z0-9]+/', '-', $name), '');
-            $slug = trim($slug, '-');
+            $slug = strtolower(trim((string) preg_replace('/[^A-Za-z0-9]+/', '-', $name), '-'));
             $createdAt = date('Y-m-d H:i:s', $now - random_int(120, 220) * 86400);
             $insert->execute([$name, $slug, $desc, $loc, $phone, $email, $createdAt]);
         }

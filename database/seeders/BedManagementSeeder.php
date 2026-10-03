@@ -40,8 +40,9 @@ final class BedManagementSeeder extends Seeder
         $bInsert = $db->prepare('INSERT INTO beds (room_id, bed_number, status) VALUES (?, ?, "available")');
         $bedIds = [];
         foreach ($rooms as $r) {
-            $rInsert->execute($r); $roomId = (int) $db->lastInsertId();
-            for ($i = 1; $i <= $r[4]; $i++) {
+            $bedCount = $r[4]; // 5th element is bed count, NOT a SQL parameter
+            $rInsert->execute(array_slice($r, 0, 4)); $roomId = (int) $db->lastInsertId();
+            for ($i = 1; $i <= $bedCount; $i++) {
                 $bInsert->execute([$roomId, (string) $i]); $bedIds[] = (int) $db->lastInsertId();
             }
         }
