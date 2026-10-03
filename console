@@ -30,6 +30,7 @@ use Seeders\AuditLogSeeder;
 use Seeders\BedManagementSeeder;
 use Seeders\BillingSeeder;
 use Seeders\ConsultationSeeder;
+use Seeders\DemoDataSeeder;
 use Seeders\DepartmentSeeder;
 use Seeders\DoctorSeeder;
 use Seeders\LaboratorySeeder;
@@ -81,6 +82,7 @@ function seeders(): array
         ConsultationSeeder::class,
         LaboratorySeeder::class,
         BillingSeeder::class,
+        DemoDataSeeder::class,
         AuditLogSeeder::class,
     ];
     usort($all, static fn (string $a, string $b): int => $a::order() <=> $b::order());
@@ -165,6 +167,23 @@ switch ($command) {
         }
         Logger::info('Database seeded via console.');
         say('Demo data restored (users password: Admin@12345 / Staff@12345).');
+    }
+
+    case 'demo:data': {
+        ensureDatabaseExists();
+        if (!Database::tableExists('roles')) {
+            say(['✗ Foundation tables missing. Run `php console migrate` first.'], 1);
+        }
+        require_once __DIR__ . '/database/seeders/Seeder.php';
+        require_once __DIR__ . '/database/seeders/DemoDataSeeder.php';
+        echo 'Generating comprehensive demo data...' . PHP_EOL . PHP_EOL;
+        \Seeders\DemoDataSeeder::run(Database::pdo());
+        echo PHP_EOL . '✓ Comprehensive demo data generated.' . PHP_EOL;
+        echo PHP_EOL . 'Demo login credentials:' . PHP_EOL;
+        echo '  Super Admin:  admin@medicore.test / Admin@12345' . PHP_EOL;
+        echo '  All others:   demoN@medicore.test / Staff@12345 (N=1-200)' . PHP_EOL;
+        echo '  Original staff: sarah.chen@medicore.test / Staff@12345 (etc.)' . PHP_EOL;
+        exit(0);
     }
 
     case 'fresh':
