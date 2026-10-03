@@ -33,8 +33,9 @@ $menu = [
         'label' => 'Hospital', 'items' => [
             ['key' => 'patients',    'label' => 'Patients',     'href' => url('/admin/patients'), 'icon' => 'users', 'can' => 'patients.view', 'soon' => false],
             ['key' => 'appointments','label' => 'Appointments', 'href' => '#', 'icon' => 'calendar-days',  'can' => null, 'soon' => true],
-            ['key' => 'doctors',    'label' => 'Doctors',       'href' => '#', 'icon' => 'stethoscope',    'can' => null, 'soon' => true],
-            ['key' => 'departments','label' => 'Departments',  'href' => '#', 'icon' => 'building-2',     'can' => null, 'soon' => true],
+            ['key' => 'doctors',    'label' => 'Doctors',       'href' => url('/admin/doctors'), 'icon' => 'stethoscope', 'can' => 'doctors.view', 'soon' => false],
+            ['key' => 'departments','label' => 'Departments',   'href' => url('/admin/departments'), 'icon' => 'building-2', 'can' => 'departments.view', 'soon' => false],
+            ['key' => 'staff',     'label' => 'Staff',          'href' => url('/admin/staff'), 'icon' => 'id-card', 'can' => 'staff.view', 'soon' => false],
         ],
     ],
     [

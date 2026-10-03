@@ -13,6 +13,9 @@ declare(strict_types=1);
  */
 
 use App\Controllers\Admin\AuditLogController;
+use App\Controllers\Admin\DepartmentController;
+use App\Controllers\Admin\DoctorController;
+use App\Controllers\Admin\StaffController;
 use App\Controllers\Admin\PatientController;
 use App\Controllers\Admin\PermissionController;
 use App\Controllers\Admin\ProfileController;
@@ -122,6 +125,108 @@ $router->group(['prefix' => '/admin', 'middleware' => ['auth', 'password_current
 
     $r->post('/patients/{id}/documents/{docId}/delete', [PatientController::class, 'deleteDocument'])
         ->name('patients.documents.delete')->middleware('can:patients.update');
+
+    // --- Departments ----------------------------------------------------
+    $r->get('/departments', [DepartmentController::class, 'index'])
+        ->name('departments.index')->middleware('can:departments.view');
+
+    $r->get('/departments/create', [DepartmentController::class, 'create'])
+        ->name('departments.create')->middleware('can:departments.create');
+
+    $r->post('/departments', [DepartmentController::class, 'store'])
+        ->name('departments.store')->middleware('can:departments.create');
+
+    $r->get('/departments/{id}', [DepartmentController::class, 'show'])
+        ->name('departments.show')->middleware('can:departments.view');
+
+    $r->get('/departments/{id}/edit', [DepartmentController::class, 'edit'])
+        ->name('departments.edit')->middleware('can:departments.update');
+
+    $r->post('/departments/{id}', [DepartmentController::class, 'update'])
+        ->name('departments.update')->middleware('can:departments.update');
+
+    $r->post('/departments/{id}/archive', [DepartmentController::class, 'archive'])
+        ->name('departments.archive')->middleware('can:departments.update');
+
+    $r->post('/departments/{id}/restore', [DepartmentController::class, 'restore'])
+        ->name('departments.restore')->middleware('can:departments.update');
+
+    // --- Doctors --------------------------------------------------------
+    $r->get('/doctors', [DoctorController::class, 'index'])
+        ->name('doctors.index')->middleware('can:doctors.view');
+
+    $r->get('/doctors/create', [DoctorController::class, 'create'])
+        ->name('doctors.create')->middleware('can:doctors.create');
+
+    $r->post('/doctors', [DoctorController::class, 'store'])
+        ->name('doctors.store')->middleware('can:doctors.create');
+
+    $r->get('/doctors/{id}', [DoctorController::class, 'show'])
+        ->name('doctors.show')->middleware('can:doctors.view');
+
+    $r->get('/doctors/{id}/edit', [DoctorController::class, 'edit'])
+        ->name('doctors.edit')->middleware('can:doctors.update');
+
+    $r->post('/doctors/{id}', [DoctorController::class, 'update'])
+        ->name('doctors.update')->middleware('can:doctors.update');
+
+    $r->post('/doctors/{id}/archive', [DoctorController::class, 'archive'])
+        ->name('doctors.archive')->middleware('can:doctors.update');
+
+    $r->post('/doctors/{id}/restore', [DoctorController::class, 'restore'])
+        ->name('doctors.restore')->middleware('can:doctors.update');
+
+    $r->post('/doctors/{id}/schedule', [DoctorController::class, 'storeSchedule'])
+        ->name('doctors.schedule.store')->middleware('can:doctors.update');
+
+    $r->post('/doctors/{id}/schedule/{slotId}/delete', [DoctorController::class, 'deleteSchedule'])
+        ->name('doctors.schedule.delete')->middleware('can:doctors.update');
+
+    $r->post('/doctors/{id}/leaves', [DoctorController::class, 'storeLeave'])
+        ->name('doctors.leaves.store')->middleware('can:doctors.update');
+
+    $r->post('/doctors/{id}/leaves/{leaveId}', [DoctorController::class, 'decideLeave'])
+        ->name('doctors.leaves.decide')->middleware('can:doctors.update');
+
+    // --- Staff ----------------------------------------------------------
+    $r->get('/staff', [StaffController::class, 'index'])
+        ->name('staff.index')->middleware('can:staff.view');
+
+    $r->get('/staff/create', [StaffController::class, 'create'])
+        ->name('staff.create')->middleware('can:staff.create');
+
+    $r->post('/staff', [StaffController::class, 'store'])
+        ->name('staff.store')->middleware('can:staff.create');
+
+    $r->get('/staff/{id}', [StaffController::class, 'show'])
+        ->name('staff.show')->middleware('can:staff.view');
+
+    $r->get('/staff/{id}/edit', [StaffController::class, 'edit'])
+        ->name('staff.edit')->middleware('can:staff.update');
+
+    $r->post('/staff/{id}', [StaffController::class, 'update'])
+        ->name('staff.update')->middleware('can:staff.update');
+
+    $r->post('/staff/{id}/archive', [StaffController::class, 'archive'])
+        ->name('staff.archive')->middleware('can:staff.update');
+
+    $r->post('/staff/{id}/restore', [StaffController::class, 'restore'])
+        ->name('staff.restore')->middleware('can:staff.update');
+
+    $r->post('/staff/{id}/shifts', [StaffController::class, 'storeShift'])
+        ->name('staff.shifts.store')->middleware('can:staff.update');
+
+    $r->post('/staff/{id}/shifts/{shiftId}/delete', [StaffController::class, 'deleteShift'])
+        ->name('staff.shifts.delete')->middleware('can:staff.update');
+
+    $r->post('/staff/{id}/attendance', [StaffController::class, 'storeAttendance'])
+        ->name('staff.attendance.store')->middleware('can:staff.update');
+
+    $r->post('/staff/{id}/leaves', [StaffController::class, 'storeLeave'])
+        ->name('staff.leaves.store')->middleware('can:staff.update');
+
+    $r->post('/staff/{id}/leaves/{leaveId}', [StaffController::class, 'decideLeave'])
+        ->name('staff.leaves.decide')->middleware('can:staff.update');
 
     // --- Roles & permissions ---------------------------------------------
     $r->get('/roles', [RoleController::class, 'index'])

@@ -15,7 +15,6 @@ final class SearchService
 {
     private const MODULE_INDEX = [
         ['label' => 'Appointments', 'icon' => 'calendar-days', 'route' => null, 'table' => 'appointments'],
-        ['label' => 'Doctors',      'icon' => 'stethoscope', 'route' => null, 'table' => 'doctors'],
         ['label' => 'Billing',      'icon' => 'receipt',    'route' => null, 'table' => 'invoices'],
         ['label' => 'Bed manager',  'icon' => 'bed-double', 'route' => null, 'table' => 'beds'],
     ];
@@ -63,6 +62,82 @@ final class SearchService
                 }
                 $total += count($results);
                 $groups[] = ['label' => 'Patients', 'icon' => 'user-round', 'results' => $results];
+            }
+        }
+
+        // --- Doctors (live module, permission-gated) -------------------
+        if (Database::tableExists('doctors') && \App\Core\Auth::can('doctors.view')) {
+            $like = '%' . $query . '%';
+            $rows = Database::query(
+                "SELECT doc.id, doc.doctor_code, doc.specialization, u.name, u.phone
+                 FROM doctors doc
+                 INNER JOIN users u ON u.id = doc.user_id
+                 WHERE doc.archived_at IS NULL
+                   AND (u.name LIKE ? OR doc.doctor_code LIKE ? OR doc.specialization LIKE ?
+                        OR doc.registration_number LIKE ? OR u.phone LIKE ?)
+                 ORDER BY doc.created_at DESC LIMIT 5",
+                [$like, $like, $like, $like, $like]
+            );
+            if ($rows !== []) {
+                $results = [];
+                foreach ($rows as $row) {
+                    $results[] = [
+                        'title'    => "{$row['name']} · {$row['doctor_code']}",
+                        'subtitle' => 'Doctor · ' . $row['specialization'],
+                        'url'      => url('/admin/doctors/' . (int) $row['id']),
+                    ];
+                }
+                $total += count($results);
+                $groups[] = ['label' => 'Doctors', 'icon' => 'stethoscope', 'results' => $results];
+            }
+        }
+
+        // --- Staff (live module, permission-gated) -------------------
+        if (Database::tableExists('staff_profiles') && \App\Core\Auth::can('staff.view')) {
+            $like = '%' . $query . '%';
+            $rows = Database::query(
+                "SELECT sp.id, sp.employee_id, sp.job_title, u.name, u.phone
+                 FROM staff_profiles sp
+                 INNER JOIN users u ON u.id = sp.user_id
+                 WHERE sp.archived_at IS NULL
+                   AND (u.name LIKE ? OR sp.employee_id LIKE ? OR sp.job_title LIKE ? OR u.phone LIKE ?)
+                 ORDER BY sp.created_at DESC LIMIT 5",
+                [$like, $like, $like, $like]
+            );
+            if ($rows !== []) {
+                $results = [];
+                foreach ($rows as $row) {
+                    $results[] = [
+                        'title'    => "{$row['name']} · {$row['employee_id']}",
+                        'subtitle' => 'Staff · ' . $row['job_title'],
+                        'url'      => url('/admin/staff/' . (int) $row['id']),
+                    ];
+                }
+                $total += count($results);
+                $groups[] = ['label' => 'Staff', 'icon' => 'id-card', 'results' => $results];
+            }
+        }
+
+        // --- Departments (live module, permission-gated) -------------------
+        if (Database::tableExists('departments') && \App\Core\Auth::can('departments.view')) {
+            $like = '%' . $query . '%';
+            $rows = Database::query(
+                "SELECT id, name, slug, location FROM departments
+                 WHERE archived_at IS NULL AND (name LIKE ? OR slug LIKE ? OR location LIKE ?)
+                 ORDER BY name LIMIT 5",
+                [$like, $like, $like]
+            );
+            if ($rows !== []) {
+                $results = [];
+                foreach ($rows as $row) {
+                    $results[] = [
+                        'title'    => $row['name'],
+                        'subtitle' => 'Department · ' . ($row['location'] ?? $row['slug']),
+                        'url'      => url('/admin/departments/' . (int) $row['id']),
+                    ];
+                }
+                $total += count($results);
+                $groups[] = ['label' => 'Departments', 'icon' => 'building-2', 'results' => $results];
             }
         }
 

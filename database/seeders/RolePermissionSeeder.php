@@ -23,29 +23,31 @@ final class RolePermissionSeeder extends Seeder
         $matrix = [
             'administrator' => [
                 'dashboard.view', 'users.*', 'roles.view', 'settings.*', 'audit.*',
-                'patients.view', 'appointments.*', 'doctors.view', 'departments.*',
+                'patients.view', 'appointments.*', 'doctors.*', 'departments.*', 'staff.*',
                 'beds.view', 'reports.*',
             ],
             'doctor' => [
                 'dashboard.view', 'patients.*', 'appointments.*', 'laboratory.view',
                 'laboratory.update', 'laboratory.approve', 'pharmacy.view', 'reports.view',
+                'staff.view', 'departments.view',
             ],
             'nurse' => [
                 'dashboard.view', 'patients.view', 'patients.update', 'appointments.view',
-                'beds.*', 'laboratory.view',
+                'beds.*', 'laboratory.view', 'staff.view', 'departments.view',
             ],
             'receptionist' => [
                 'dashboard.view', 'patients.*', 'appointments.*', 'doctors.view',
-                'billing.view', 'billing.create', 'payments.view',
+                'departments.view', 'staff.view', 'billing.view', 'billing.create', 'payments.view',
             ],
             'pharmacist' => [
-                'dashboard.view', 'pharmacy.*',
+                'dashboard.view', 'pharmacy.*', 'departments.view',
             ],
             'lab-technician' => [
-                'dashboard.view', 'laboratory.*',
+                'dashboard.view', 'laboratory.*', 'departments.view',
             ],
             'accountant' => [
                 'dashboard.view', 'billing.*', 'payments.*', 'reports.view', 'reports.export',
+                'staff.view', 'departments.view',
             ],
         ];
 

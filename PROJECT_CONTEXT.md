@@ -1,7 +1,7 @@
 # PROJECT_CONTEXT — MediCore HMS
 
 > **Purpose:** the durable architecture contract for every future phase.
-> Read this before adding any module. Last updated: Phase 3 (patient management).
+> Read this before adding any module. Last updated: Phase 4 (doctors, staff, departments).
 
 ---
 
@@ -97,6 +97,71 @@ with real stats + honest empty states, 32-assertion test suite.
   role; invalid references are silently dropped (not stored) to prevent
   dangling FKs when staff are later archived.
 
+### ✅ Phase 4 — Doctor, Staff & Department Management (COMPLETE, verified 2026-10-04)
+
+| Area | State |
+|---|---|
+| Department CRUD: create / edit / view / archive / restore + member roster | ✅ Live |
+| Department overview dashboard: doctor/staff counts, contact, head doctor | ✅ Live |
+| Doctor profiles: specialization, qualifications, registration no., bio, fees, room, dept, status | ✅ Live |
+| Auto-generated doctor codes (MCD-YYYY-NNNNN, collision-safe) | ✅ Live |
+| Doctor profile image upload (JPG/PNG/WebP, MIME-sniffed, private storage) | ✅ Live |
+| Weekly recurring schedule editor (day-of-week + time range + max patients + room) | ✅ Live |
+| Schedule overlap detection — same doctor + same day, server-side rejection | ✅ Live |
+| Doctor leave records with approval workflow (pending → approved/rejected) | ✅ Live |
+| Approved leave transitions doctor status → on_leave automatically | ✅ Live |
+| Doctor profile tabs: overview, schedule, leaves, recent consultations | ✅ Live |
+| Doctor consultation statistics (visit count from patient_visits) | ✅ Live |
+| Staff profiles: employee ID, job title, department, employment type, hire date, status | ✅ Live |
+| Auto-generated staff codes (MCS-YYYY-NNNNN, collision-safe) | ✅ Live |
+| Staff shift scheduling with overlap detection (same staff + same date) | ✅ Live |
+| Staff attendance: daily check-in/check-out with upsert on same date | ✅ Live |
+| Staff leave management: 6 leave types, approval workflow, status transition | ✅ Live |
+| Staff profile tabs: overview, shifts (upcoming 14), attendance (30-day summary), leaves | ✅ Live |
+| Department-assignment for both doctors and staff (FK with SET NULL on dept archive) | ✅ Live |
+| Audit coverage on every write: created/updated/archived/restored/schedule/shift/attendance/leave | ✅ Live |
+| Role-based access: doctors/departments/staff view granted to clinical + admin roles; CRUD to admins | ✅ Live |
+| Sidebar links for Doctors, Departments, Staff (replaced Soon placeholders) | ✅ Live |
+| Dashboard quick-action buttons for Doctors and Staff | ✅ Live |
+| Global search returns doctor / staff / department results (permission-gated) | ✅ Live |
+| Dashboard module registry marks Doctors, Departments, Staff as installed | ✅ Live |
+| Test suite: 13 new assertions covering dept CRUD/slug, doctor CRUD/schedule overlap/leave, staff CRUD/shift overlap/leave/attendance upsert, access control, search, module registry | ✅ Live |
+
+**Key mechanics to preserve:**
+
+- **Doctor / Staff profile extension pattern:** both `doctors` and `staff_profiles`
+  have a 1:1 FK to `users.id` (the auth account). Auth stays in users; clinical
+  and HR data live in the profile tables. A user can have at most one of each
+  profile type (enforced by a UNIQUE constraint on user_id).
+- **Code generation:** `Doctor::nextCode()` → `MCD-YYYY-NNNNN`, `StaffProfile::nextCode()`
+  → `MCS-YYYY-NNNNN`. Both read MAX(sequence) + 1, collision-check, retry up
+  to 5 times, fall back to a time-based suffix. Never trust client input for
+  the code.
+- **Department head_doctor_id references users (not doctors)** to avoid a
+  circular FK with doctors.department_id. This keeps the schema acyclic while
+  still validating that the head is a real user account.
+- **Schedule overlap detection (`DoctorSchedule::overlaps`):** checks if
+  `start_time < existing_end AND end_time > existing_start` for the same
+  doctor + day_of_week. Adjacent slots (touching at a boundary, e.g. 09–13
+  and 13–17) are allowed. Overlapping slots are rejected server-side.
+- **Shift overlap detection (`StaffShift::overlaps`):** same interval logic
+  for the same staff_id + shift_date. Prevents double-booking a staff member.
+- **Leave status transitions:** when a doctor/staff leave is set to `approved`,
+  the service automatically transitions the profile status to `on_leave`.
+  Rejecting a leave does NOT revert the status (the most recent approved
+  leave wins). This is intentional — rejecting one leave request should not
+  silently reactivate someone who has another approved leave active.
+- **Attendance upsert:** `staff_attendance` has a UNIQUE(staff_id, date)
+  constraint. `StaffService::recordAttendance` checks for an existing row
+  and updates it if present (no duplicate). This lets supervisors correct a
+  record later in the day without creating a second entry.
+- **Image uploads** (doctor/staff profile images) follow the same secure
+  pipeline as patient documents: extension whitelist + `finfo` MIME sniffing
+  + size cap (2 MB) + random stored name in `storage/uploads/{doctors,staff}/`.
+  Downloads stream through a permission-gated controller (to be wired if
+  profile-image serving is needed — currently images are optional and not
+  rendered inline in the directory cards).
+
 ### ⏳ Planned modules (each = one future phase)
 
 Modules light up on the dashboard/sidebar **automatically** when their
@@ -105,9 +170,10 @@ backing table exists (`DashboardService::moduleStatus()` + stat guards):
 | Module | Backing table(s) | Permissions already seeded | State |
 |---|---|---|---|
 | ~~Patients~~ | `patients`, `patient_visits`, `patient_documents` | patients.view/create/update/delete | ✅ Phase 3 |
+| ~~Doctors~~ | `doctors`, `doctor_schedules`, `doctor_leaves` | doctors.view/create/update/delete | ✅ Phase 4 |
+| ~~Departments~~ | `departments` | departments.view/create/update/delete | ✅ Phase 4 |
+| ~~Staff~~ | `staff_profiles`, `staff_shifts`, `staff_attendance`, `staff_leaves` | staff.view/create/update/delete | ✅ Phase 4 |
 | Appointments | `appointments` | appointments.* (incl. approve) | ⏳ |
-| Doctors | `doctors` | doctors.* | ⏳ |
-| Departments | `departments` | departments.* | ⏳ |
 | Bed management | `beds` | beds.view/update | ⏳ |
 | Laboratory | `lab_tests` | laboratory.* (incl. approve) | ⏳ |
 | Pharmacy | `medicines` | pharmacy.* | ⏳ |
@@ -222,7 +288,7 @@ public/index.php (sole web entry point)
 8. Add audit logging to every write action.
 9. Extend `tests/run.php` with module tests; run `php console test`.
 
-## 7. Known limitations (accepted through phase 3)
+## 7. Known limitations (accepted through phase 4)
 
 - Deactivating/archiving a user does not kill their live session instantly;
   it lands on the next 5-minute snapshot re-sync or their next request after
@@ -251,3 +317,22 @@ public/index.php (sole web entry point)
 - The encounter timeline records visits created through the profile form.
   Integration with an appointments module (auto-creating a visit when an
   appointment is completed) is deferred to the appointments phase.
+- Doctor availability (`doctor_schedules`) and leave (`doctor_leaves`) are
+  stored and queryable, but the actual integration with an appointments
+  booking flow (slot generation, leave blocking) is deferred to the
+  appointments phase. The `DoctorSchedule::isOnLeaveOn()` and
+  `DoctorSchedule::slotsForDate()` helpers are ready for that integration.
+- Doctor and staff profile images are uploaded and stored securely but are
+  not yet rendered inline on directory cards/profile pages. A future
+  image-serving route (permission-gated, like patient document downloads)
+  would enable inline display without exposing files as public URLs.
+- Staff shift overlap detection prevents same-day double-booking for one
+  staff member, but does not enforce minimum rest between an evening shift
+  end and a next-day morning shift start. That gap rule can be added to
+  `StaffShift::overlaps` when the scheduling policy is finalised.
+- Attendance is manually recorded by a supervisor. Auto check-in via
+  hardware (RFID / biometric / QR) is not implemented; the schema supports
+  the data but the capture is manual for now.
+- Leave balance / accrual tracking (annual leave entitlement + consumed
+  count) is not modelled. The current design records each leave request
+  individually; a future balance ledger could aggregate them per year.

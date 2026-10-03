@@ -8,6 +8,15 @@
 !/storage/uploads/patients/
 /storage/uploads/patients/*
 !/storage/uploads/patients/.gitkeep
+!/storage/uploads/doctors/
+/storage/uploads/doctors/*
+!/storage/uploads/doctors/.gitkeep
+!/storage/uploads/staff/
+/storage/uploads/staff/*
+!/storage/uploads/staff/.gitkeep
+!/storage/uploads/departments/
+/storage/uploads/departments/*
+!/storage/uploads/departments/.gitkeep
 public/uploads/*
 !public/uploads/.gitkeep
 .phpunit.result.cache

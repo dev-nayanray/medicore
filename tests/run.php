@@ -25,15 +25,21 @@ use App\Core\Router;
 use App\Core\Session;
 use App\Core\Validator;
 use App\Core\View;
+use App\Models\Department;
+use App\Models\Doctor;
 use App\Models\Patient;
 use App\Models\Role;
+use App\Models\StaffProfile;
 use App\Models\User;
 use App\Services\AuthService;
 use App\Services\DashboardService;
+use App\Services\DepartmentService;
+use App\Services\DoctorService;
 use App\Services\PasswordResetService;
 use App\Services\PatientService;
 use App\Services\SearchService;
 use App\Services\SettingService;
+use App\Services\StaffService;
 use App\Services\UserService;
 
 // ---------------------------------------------------------------------------
@@ -770,6 +776,381 @@ test('Environment: restore seeded patients', static function () {
     Database::execute('DELETE FROM patients');
     \Seeders\PatientSeeder::run(Database::pdo());
     expectTrue(\App\Models\Patient::counts()['total'] >= 12);
+});
+
+// ---------------------------------------------------------------------------
+// Phase 4 — Department, Doctor & Staff management
+// ---------------------------------------------------------------------------
+require_once BASE_PATH . '/database/seeders/DepartmentSeeder.php';
+require_once BASE_PATH . '/database/seeders/DoctorSeeder.php';
+require_once BASE_PATH . '/database/seeders/StaffSeeder.php';
+
+// Deterministic slate for phase 4 tests.
+Database::execute('DELETE FROM staff_leaves');
+Database::execute('DELETE FROM staff_attendance');
+Database::execute('DELETE FROM staff_shifts');
+Database::execute('DELETE FROM staff_profiles');
+Database::execute('DELETE FROM doctor_leaves');
+Database::execute('DELETE FROM doctor_schedules');
+Database::execute('DELETE FROM doctors');
+Database::execute('DELETE FROM departments');
+\Seeders\DepartmentSeeder::run(Database::pdo());
+\Seeders\DoctorSeeder::run(Database::pdo());
+\Seeders\StaffSeeder::run(Database::pdo());
+
+test('Department: CRUD lifecycle with archive preservation', static function () {
+    Session::start();
+    Auth::login(User::findByEmail('admin@medicore.test'));
+    $request = new Request();
+
+    $created = DepartmentService::create(['name' => 'Test Department', 'description' => 'Unit for testing', 'location' => 'Lab X', 'phone' => '+880100000000', 'email' => 'testdept@medicore.test'], $request);
+    expectTrue($created['ok']);
+    $id = (int) $created['id'];
+
+    $dept = Department::find($id);
+    expectTrue($dept !== null);
+    expectTrue($dept['slug'] === 'test-department', 'slug auto-generated from name');
+    expectTrue($dept['archived_at'] === null);
+
+    // Archive soft-deletes; the row stays for member references.
+    $r = DepartmentService::archive($id, $request);
+    expectTrue($r['ok']);
+    $archived = Department::find($id);
+    expectTrue($archived['archived_at'] !== null, 'archived_at must be set');
+
+    // Archived departments are excluded from the default directory.
+    $default = Department::directory(['status' => 'active'], 1, 1000);
+    $inDefault = in_array($id, array_map(static fn ($r) => (int) $r['id'], $default['rows']), true);
+    expectTrue(!$inDefault, 'archived dept hidden from default directory');
+
+    $archivedList = Department::directory(['status' => 'archived'], 1, 1000);
+    $inArchived = in_array($id, array_map(static fn ($r) => (int) $r['id'], $archivedList['rows']), true);
+    expectTrue($inArchived, 'archived dept visible in archived filter');
+
+    // Restore.
+    expectTrue(DepartmentService::restore($id, $request)['ok']);
+    expectTrue(Department::find($id)['archived_at'] === null);
+
+    DepartmentService::archive($id, $request); // clean up — remove from active pool
+    Auth::logout();
+});
+
+test('Department: slug collision-safe', static function () {
+    Session::start();
+    Auth::login(User::findByEmail('admin@medicore.test'));
+    $request = new Request();
+
+    $first = DepartmentService::create(['name' => 'Imaging', 'description' => 'First'], $request);
+    $second = DepartmentService::create(['name' => 'Imaging', 'description' => 'Second'], $request);
+    $dept1 = Department::find((int) $first['id']);
+    $dept2 = Department::find((int) $second['id']);
+    expectTrue($dept1['slug'] !== $dept2['slug'], 'duplicate names must get different slugs');
+    expectTrue($dept1['slug'] === 'imaging', 'first slug is clean');
+    expectTrue(str_starts_with($dept2['slug'], 'imaging-'), 'second slug gets numeric suffix');
+    Auth::logout();
+});
+
+test('Doctor: profile CRUD with code generation', static function () {
+    Session::start();
+    Auth::login(User::findByEmail('admin@medicore.test'));
+    $request = new Request();
+
+    // Generate 3 codes — must be unique.
+    $codes = [];
+    for ($i = 0; $i < 3; $i++) {
+        $codes[] = Doctor::nextCode();
+    }
+    expect(count(array_unique($codes)), 3, 'codes must be unique');
+    foreach ($codes as $code) {
+        expectTrue(preg_match('/^MCD-\d{4}-\d{5}$/', $code) === 1, "bad code format: {$code}");
+    }
+
+    // Create a profile for a doctor user without one yet.
+    // Use a fresh doctor user created on the fly.
+    $userId = (int) Database::scalar("SELECT u.id FROM users u INNER JOIN role_user ru ON ru.user_id = u.id INNER JOIN roles r ON r.id = ru.role_id WHERE r.slug = 'doctor' LIMIT 1");
+    expectTrue($userId > 0, 'a doctor user must exist for the test');
+
+    // Clean any existing profile for this user.
+    Database::execute('DELETE FROM doctors WHERE user_id = ?', [$userId]);
+
+    $created = DoctorService::create([
+        'user_id' => $userId,
+        'specialization' => 'Test Specialty',
+        'qualifications' => 'MBBS',
+        'consultation_fee' => '800.00',
+        'status' => 'active',
+    ], $request);
+    expectTrue($created['ok']);
+    $id = (int) $created['id'];
+    expectTrue(Doctor::find($id) !== null);
+
+    // Update.
+    $r = DoctorService::update($id, [
+        'specialization' => 'Updated Specialty',
+        'qualifications' => 'MBBS, MD',
+        'consultation_fee' => '1000.00',
+        'status' => 'active',
+    ], $request);
+    expectTrue($r['ok']);
+    $fresh = Doctor::find($id);
+    expect($fresh['specialization'], 'Updated Specialty');
+    expect($fresh['consultation_fee'], '1000.00');
+
+    Database::execute('DELETE FROM doctor_schedules WHERE doctor_id = ?', [$id]);
+    Database::execute('DELETE FROM doctors WHERE id = ?', [$id]);
+    Auth::logout();
+});
+
+test('Doctor: schedule overlap detection', static function () {
+    Session::start();
+    Auth::login(User::findByEmail('admin@medicore.test'));
+    $request = new Request();
+
+    // Use an existing doctor.
+    $doctor = Database::queryOne('SELECT id FROM doctors LIMIT 1');
+    expectTrue($doctor !== null, 'a doctor must exist for the test');
+    $doctorId = (int) $doctor['id'];
+
+    // Clean any existing schedule.
+    Database::execute('DELETE FROM doctor_schedules WHERE doctor_id = ?', [$doctorId]);
+
+    // 09:00–13:00 on Monday.
+    $r1 = DoctorService::saveScheduleSlot($doctorId, [
+        'day_of_week' => 1, 'start_time' => '09:00', 'end_time' => '13:00', 'max_patients' => 20, 'is_active' => 1,
+    ], $request);
+    expectTrue($r1['ok'], 'first slot must be saved');
+
+    // 11:00–15:00 on Monday overlaps the first.
+    $r2 = DoctorService::saveScheduleSlot($doctorId, [
+        'day_of_week' => 1, 'start_time' => '11:00', 'end_time' => '15:00', 'max_patients' => 10, 'is_active' => 1,
+    ], $request);
+    expectTrue(!$r2['ok'], 'overlapping slot must be rejected');
+
+    // 13:00–17:00 on Monday is adjacent (touches at 13:00) — allowed.
+    $r3 = DoctorService::saveScheduleSlot($doctorId, [
+        'day_of_week' => 1, 'start_time' => '13:00', 'end_time' => '17:00', 'max_patients' => 10, 'is_active' => 1,
+    ], $request);
+    expectTrue($r3['ok'], 'adjacent slot touching the boundary is allowed');
+
+    // End <= start is invalid.
+    $r4 = DoctorService::saveScheduleSlot($doctorId, [
+        'day_of_week' => 2, 'start_time' => '17:00', 'end_time' => '09:00', 'max_patients' => 10, 'is_active' => 1,
+    ], $request);
+    expectTrue(!$r4['ok'], 'end-before-start must be rejected');
+
+    Database::execute('DELETE FROM doctor_schedules WHERE doctor_id = ?', [$doctorId]);
+    Auth::logout();
+});
+
+test('Doctor: leave records and status transition', static function () {
+    Session::start();
+    Auth::login(User::findByEmail('admin@medicore.test'));
+    $request = new Request();
+
+    $doctor = Database::queryOne('SELECT id FROM doctors WHERE status = "active" LIMIT 1');
+    expectTrue($doctor !== null);
+    $doctorId = (int) $doctor['id'];
+
+    $r = DoctorService::createLeave($doctorId, [
+        'start_date' => date('Y-m-d', strtotime('+5 days')),
+        'end_date' => date('Y-m-d', strtotime('+7 days')),
+        'reason' => 'Conference',
+        'status' => 'approved',
+    ], $request);
+    expectTrue($r['ok'], 'leave creation with approved status should succeed');
+
+    // Approved leave marks the doctor on_leave.
+    $fresh = Doctor::find($doctorId);
+    expectTrue($fresh['status'] === 'on_leave', 'approved leave should transition doctor to on_leave');
+
+    Auth::logout();
+});
+
+test('Staff: profile CRUD with code generation', static function () {
+    Session::start();
+    Auth::login(User::findByEmail('admin@medicore.test'));
+    $request = new Request();
+
+    // Generate 3 codes.
+    $codes = [];
+    for ($i = 0; $i < 3; $i++) {
+        $codes[] = StaffProfile::nextCode();
+    }
+    expect(count(array_unique($codes)), 3);
+    foreach ($codes as $code) {
+        expectTrue(preg_match('/^MCS-\d{4}-\d{5}$/', $code) === 1, "bad code: {$code}");
+    }
+
+    // Create a profile for a user without one yet.
+    $userId = (int) Database::scalar("SELECT u.id FROM users u WHERE NOT EXISTS (SELECT 1 FROM staff_profiles sp WHERE sp.user_id = u.id) AND NOT EXISTS (SELECT 1 FROM doctors d WHERE d.user_id = u.id) LIMIT 1");
+    if ($userId > 0) {
+        $created = StaffService::create([
+            'user_id' => $userId,
+            'job_title' => 'Test Position',
+            'employment_type' => 'full_time',
+            'status' => 'active',
+        ], $request);
+        expectTrue($created['ok']);
+        $id = (int) $created['id'];
+
+        $r = StaffService::update($id, [
+            'job_title' => 'Updated Position',
+            'employment_type' => 'part_time',
+            'status' => 'active',
+        ], $request);
+        expectTrue($r['ok']);
+        expect(StaffProfile::find($id)['job_title'], 'Updated Position');
+
+        Database::execute('DELETE FROM staff_shifts WHERE staff_id = ?', [$id]);
+        Database::execute('DELETE FROM staff_attendance WHERE staff_id = ?', [$id]);
+        Database::execute('DELETE FROM staff_leaves WHERE staff_id = ?', [$id]);
+        Database::execute('DELETE FROM staff_profiles WHERE id = ?', [$id]);
+    }
+    Auth::logout();
+});
+
+test('Staff: shift overlap detection', static function () {
+    Session::start();
+    Auth::login(User::findByEmail('admin@medicore.test'));
+    $request = new Request();
+
+    $staff = Database::queryOne('SELECT id FROM staff_profiles LIMIT 1');
+    expectTrue($staff !== null);
+    $staffId = (int) $staff['id'];
+
+    $date = date('Y-m-d', strtotime('+1 day'));
+    Database::execute('DELETE FROM staff_shifts WHERE staff_id = ? AND shift_date = ?', [$staffId, $date]);
+
+    // 09:00–17:00.
+    $r1 = StaffService::createShift($staffId, [
+        'shift_date' => $date, 'start_time' => '09:00', 'end_time' => '17:00', 'shift_type' => 'morning',
+    ], $request);
+    expectTrue($r1['ok']);
+
+    // 15:00–23:00 overlaps.
+    $r2 = StaffService::createShift($staffId, [
+        'shift_date' => $date, 'start_time' => '15:00', 'end_time' => '23:00', 'shift_type' => 'evening',
+    ], $request);
+    expectTrue(!$r2['ok'], 'overlapping shift must be rejected');
+
+    // Different day is fine.
+    $r3 = StaffService::createShift($staffId, [
+        'shift_date' => date('Y-m-d', strtotime('+2 days')), 'start_time' => '09:00', 'end_time' => '17:00', 'shift_type' => 'morning',
+    ], $request);
+    expectTrue($r3['ok']);
+
+    Database::execute('DELETE FROM staff_shifts WHERE staff_id = ? AND shift_date = ?', [$staffId, $date]);
+    Auth::logout();
+});
+
+test('Staff: leave approval workflow transitions status', static function () {
+    Session::start();
+    Auth::login(User::findByEmail('admin@medicore.test'));
+    $request = new Request();
+
+    $staff = Database::queryOne('SELECT id FROM staff_profiles WHERE status = "active" LIMIT 1');
+    expectTrue($staff !== null);
+    $staffId = (int) $staff['id'];
+
+    $r = StaffService::createLeave($staffId, [
+        'leave_type' => 'annual',
+        'start_date' => date('Y-m-d', strtotime('+10 days')),
+        'end_date' => date('Y-m-d', strtotime('+14 days')),
+        'reason' => 'Vacation',
+        'status' => 'pending',
+    ], $request);
+    expectTrue($r['ok']);
+    $leaveId = (int) Database::scalar('SELECT id FROM staff_leaves WHERE staff_id = ? ORDER BY id DESC LIMIT 1', [$staffId]);
+
+    // Approve → status should transition.
+    $r2 = StaffService::decideLeave($leaveId, 'approved', $request);
+    expectTrue($r2['ok']);
+    $fresh = StaffProfile::find($staffId);
+    expectTrue($fresh['status'] === 'on_leave', 'approved leave should transition staff to on_leave');
+
+    $leave = Database::queryOne('SELECT status, approved_by FROM staff_leaves WHERE id = ?', [$leaveId]);
+    expectTrue($leave['status'] === 'approved');
+    expectTrue($leave['approved_by'] !== null, 'approver must be recorded');
+
+    Auth::logout();
+});
+
+test('Staff: attendance upsert (same staff + date)', static function () {
+    Session::start();
+    Auth::login(User::findByEmail('admin@medicore.test'));
+    $request = new Request();
+
+    $staff = Database::queryOne('SELECT id FROM staff_profiles LIMIT 1');
+    $staffId = (int) $staff['id'];
+    $date = date('Y-m-d', strtotime('-1 day'));
+
+    Database::execute('DELETE FROM staff_attendance WHERE staff_id = ? AND date = ?', [$staffId, $date]);
+
+    $r1 = StaffService::recordAttendance($staffId, [
+        'date' => $date, 'check_in' => '09:05:00', 'check_out' => '17:10:00', 'status' => 'present', 'notes' => null,
+    ], $request);
+    expectTrue($r1['ok']);
+
+    // Upsert: same date, update status.
+    $r2 = StaffService::recordAttendance($staffId, [
+        'date' => $date, 'check_in' => '09:30:00', 'check_out' => '17:10:00', 'status' => 'late', 'notes' => 'Bus delay',
+    ], $request);
+    expectTrue($r2['ok']);
+
+    $count = (int) Database::scalar('SELECT COUNT(*) FROM staff_attendance WHERE staff_id = ? AND date = ?', [$staffId, $date]);
+    expect($count, 1, 'upsert should not duplicate rows');
+
+    $row = Database::queryOne('SELECT status FROM staff_attendance WHERE staff_id = ? AND date = ?', [$staffId, $date]);
+    expect($row['status'], 'late', 'status should be updated');
+
+    Auth::logout();
+});
+
+test('Access control: doctor/staff/department permissions', static function () {
+    Session::start();
+
+    $nurse = User::findByEmail('farhana@medicore.test');
+    Auth::login($nurse);
+    expectTrue(Auth::can('staff.view'), 'nurse can view staff');
+    expectTrue(Auth::can('departments.view'), 'nurse can view departments');
+    expectTrue(!Auth::can('doctors.create'), 'nurse cannot create doctors');
+    expectTrue(!Auth::can('staff.update'), 'nurse cannot update staff');
+    Auth::logout();
+
+    $receptionist = User::findByEmail('rahim@medicore.test');
+    Auth::login($receptionist);
+    expectTrue(Auth::can('doctors.view'), 'receptionist can view doctors');
+    expectTrue(Auth::can('departments.view'), 'receptionist can view departments');
+    expectTrue(Auth::can('staff.view'), 'receptionist can view staff');
+    Auth::logout();
+
+    $accountant = User::findByEmail('mahin@medicore.test');
+    Auth::login($accountant);
+    expectTrue(Auth::can('staff.view'), 'accountant can view staff');
+    expectTrue(!Auth::can('doctors.view'), 'accountant has no doctor access');
+    Auth::logout();
+});
+
+test('Dashboard: staff module marks installed in registry', static function () {
+    $data = DashboardService::build();
+    $modules = array_column($data['modules'], 'ready', 'name');
+    expectTrue($modules['Doctors'] === true, 'Doctors module should be marked installed');
+    expectTrue($modules['Departments'] === true, 'Departments module should be marked installed');
+    expectTrue($modules['Staff'] === true, 'Staff module should be marked installed');
+});
+
+test('Search: doctors, staff and departments appear in global results', static function () {
+    $results = SearchService::search('Sarah');
+    $groups = array_column($results['groups'], null, 'label');
+    expectTrue(isset($groups['Doctors']), 'doctor results should appear for "Sarah"');
+
+    $results = SearchService::search('Rahim');
+    $groups = array_column($results['groups'], null, 'label');
+    expectTrue(isset($groups['Staff']), 'staff results should appear for "Rahim"');
+
+    $results = SearchService::search('Cardio');
+    $groups = array_column($results['groups'], null, 'label');
+    expectTrue(isset($groups['Departments']), 'department results should appear for "Cardio"');
 });
 
 // ---------------------------------------------------------------------------
