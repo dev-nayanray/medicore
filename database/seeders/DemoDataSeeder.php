@@ -315,7 +315,14 @@ final class DemoDataSeeder extends Seeder
             $token = $status !== 'pending' && $status !== 'cancelled' ? 'Q-' . str_pad((string)random_int(1, 99), 3, '0', STR_PAD_LEFT) : null;
 
             $code = 'APT-' . date('Y') . '-' . str_pad((string)$seq, 5, '0', STR_PAD_LEFT);
-            $insert->execute([$code, $patientId, $doc['id'], $doc['dept'] ?: null, $date, $start, $end, $type, $status, $token, $reasons[array_rand($reasons)], date('Y-m-d H:i:s', strtotime("-{$daysAgo} days"))]);
+            try {
+                $insert->execute([$code, $patientId, $doc['id'], $doc['dept'] ?: null, $date, $start, $end, $type, $status, $token, $reasons[array_rand($reasons)], date('Y-m-d H:i:s', strtotime("-{$daysAgo} days"))]);
+            } catch (\PDOException $e) {
+                if (str_contains($e->getMessage(), '1062')) {
+                    continue; // Skip duplicate (doctor_id, date, start_time) — unique constraint
+                }
+                throw $e;
+            }
         }
     }
 
