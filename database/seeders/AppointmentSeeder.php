@@ -22,7 +22,7 @@ final class AppointmentSeeder extends Seeder
 
         // Resolve patient + doctor + department ids.
         $patients = $db->query('SELECT id, first_name, last_name, phone FROM patients WHERE archived_at IS NULL ORDER BY id')->fetchAll(PDO::FETCH_ASSOC);
-        $doctors = $db->query("SELECT doc.id, doc.user_id, doc.department_id, doc.doctor_code, doc.specialization FROM doctors doc WHERE doc.archived_at IS NULL AND doc.status = 'active'")->fetchAll(PDO::FETCH_ASSOC);
+        $doctors = $db->query("SELECT doc.id, doc.user_id, doc.department_id, doc.doctor_code, doc.specialization FROM doctors doc WHERE doc.archived_at IS NULL")->fetchAll(PDO::FETCH_ASSOC);
         $depts = $db->query("SELECT id, slug FROM departments WHERE archived_at IS NULL")->fetchAll(PDO::FETCH_ASSOC);
         $registrar = (int) $db->query("SELECT id FROM users WHERE email = 'rahim@medicore.test'")->fetchColumn() ?: null;
 
