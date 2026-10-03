@@ -199,7 +199,7 @@ final class DemoDataSeeder extends Seeder
                     $deptId = self::$departmentIds[array_rand(self::$departmentIds)];
                     $specializations = ['Cardiology','Neurology','Orthopedics','Pediatrics','General Medicine','Dermatology','ENT','Gynecology','Urology','Psychiatry'];
                     $code = 'MCD-' . date('Y') . '-' . str_pad((string)($generated + 10), 5, '0', STR_PAD_LEFT);
-                    $db->prepare('INSERT INTO doctors (user_id, doctor_code, specialization, consultation_fee, department_id, status, hired_at, created_by) VALUES (?, ?, ?, ?, ?, "active", ?, 1)')
+                    $db->prepare('INSERT INTO doctors (user_id, doctor_code, specialization, consultation_fee, department_id, status, hired_at) VALUES (?, ?, ?, ?, ?, "active", ?)')
                         ->execute([$userId, $code, $specializations[array_rand($specializations)], random_int(500, 2000), $deptId, date('Y-m-d', strtotime('-' . random_int(60, 365) . ' days'))]);
                     $doctorId = (int) $db->lastInsertId();
                     self::$doctorIds[] = ['id' => $doctorId, 'user_id' => $userId, 'dept' => $deptId];
@@ -218,7 +218,7 @@ final class DemoDataSeeder extends Seeder
                     $titles = ['Junior Staff', 'Senior Staff', 'Officer', 'Supervisor', 'Coordinator'];
                     $code = 'MCS-' . date('Y') . '-' . str_pad((string)($generated + 10), 5, '0', STR_PAD_LEFT);
                     $empTypes = ['full_time', 'part_time', 'contract'];
-                    $db->prepare('INSERT INTO staff_profiles (user_id, employee_id, job_title, department_id, employment_type, status, created_by) VALUES (?, ?, ?, ?, ?, "active", 1)')
+                    $db->prepare('INSERT INTO staff_profiles (user_id, employee_id, job_title, department_id, employment_type, status) VALUES (?, ?, ?, ?, ?, "active")')
                         ->execute([$userId, $code, $titles[array_rand($titles)], $deptId, $empTypes[array_rand($empTypes)]]);
                 }
             }
