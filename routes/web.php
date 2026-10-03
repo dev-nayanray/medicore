@@ -415,8 +415,7 @@ $router->group(['prefix' => '/admin', 'middleware' => ['auth', 'password_current
         ->name('pharmacy.create')->middleware('can:pharmacy.create');
     $r->post('/pharmacy', [PharmacyController::class, 'store'])
         ->name('pharmacy.store')->middleware('can:pharmacy.create');
-    $r->get('/pharmacy/{id}', [PharmacyController::class, 'show'])
-        ->name('pharmacy.show')->middleware('can:pharmacy.view');
+    // Literal paths MUST come before /pharmacy/{id} to avoid the {id} catch-all.
     $r->get('/pharmacy/dispense', [PharmacyController::class, 'dispense'])
         ->name('pharmacy.dispense')->middleware('can:pharmacy.create');
     $r->post('/pharmacy/dispense', [PharmacyController::class, 'storeDispensing'])
@@ -433,14 +432,16 @@ $router->group(['prefix' => '/admin', 'middleware' => ['auth', 'password_current
         ->name('pharmacy.purchases.show')->middleware('can:pharmacy.view');
     $r->post('/pharmacy/purchases/{id}/receive', [PharmacyController::class, 'receivePurchase'])
         ->name('pharmacy.purchases.receive')->middleware('can:pharmacy.update');
+    // {id} catch-all MUST come last.
+    $r->get('/pharmacy/{id}', [PharmacyController::class, 'show'])
+        ->name('pharmacy.show')->middleware('can:pharmacy.view');
 
     // --- Inventory --------------------------------------------------------
     $r->get('/inventory', [InventoryController::class, 'index'])
         ->name('inventory.index')->middleware('can:inventory.view');
     $r->post('/inventory/items', [InventoryController::class, 'storeItem'])
         ->name('inventory.items.store')->middleware('can:inventory.create');
-    $r->get('/inventory/{id}', [InventoryController::class, 'showItem'])
-        ->name('inventory.show')->middleware('can:inventory.view');
+    // Literal paths MUST come before /inventory/{id} to avoid the {id} catch-all.
     $r->post('/inventory/purchases', [InventoryController::class, 'storePurchase'])
         ->name('inventory.purchases.store')->middleware('can:inventory.create');
     $r->get('/inventory/purchases/{id}', [InventoryController::class, 'showPurchase'])
@@ -453,6 +454,9 @@ $router->group(['prefix' => '/admin', 'middleware' => ['auth', 'password_current
         ->name('inventory.adjustments.approve')->middleware('can:inventory.update');
     $r->post('/inventory/adjustments/{id}/reject', [InventoryController::class, 'rejectAdjustment'])
         ->name('inventory.adjustments.reject')->middleware('can:inventory.update');
+    // {id} catch-all MUST come last.
+    $r->get('/inventory/{id}', [InventoryController::class, 'showItem'])
+        ->name('inventory.show')->middleware('can:inventory.view');
 
     // --- Laboratory -------------------------------------------------------
     $r->get('/laboratory', [LaboratoryController::class, 'index'])

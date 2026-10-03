@@ -20,7 +20,7 @@ final class ServiceController extends Controller
 {
     public function index(Request $request): string
     {
-        $services = Service::all('category ASC, name ASC');
+        $services = Database::query('SELECT * FROM services ORDER BY category ASC, name ASC');
         $byCategory = [];
         foreach ($services as $s) {
             $byCategory[$s['category']][] = $s;

@@ -169,7 +169,7 @@ $visitTypeTone = [
                     $glance = [
                         ['icon' => 'calendar-days', 'label' => 'Total visits', 'value' => (string) count($visits)],
                         ['icon' => 'folder-open', 'label' => 'Documents', 'value' => (string) count($documents)],
-                        ['icon' => 'clock', 'label' => 'Last visit', 'value' => $visits[0]['visited_at'] ? format_date($visits[0]['visited_at'], 'M j, Y') : '—'],
+                        ['icon' => 'clock', 'label' => 'Last visit', 'value' => !empty($visits) ? format_date($visits[0]['visited_at'], 'M j, Y') : '—'],
                         ['icon' => 'user-round-plus', 'label' => 'Registered', 'value' => format_date($patient['created_at'], 'M j, Y')],
                     ];
                     ?>
