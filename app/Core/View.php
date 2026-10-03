@@ -117,6 +117,27 @@ final class View
         return $content;
     }
 
+    /**
+     * Render a marketing page using the marketing layout.
+     * Marketing views live in resources/views/marketing/{page}.php and
+     * extend 'layouts/marketing'. Returns the fully rendered HTML.
+     */
+    public function renderMarketing(string $page, array $data = []): string
+    {
+        $content = $this->renderFile('marketing/' . $page, $data);
+
+        if ($this->layout !== null) {
+            $layout = $this->layout;
+            $this->layout = null;
+            if (!isset($this->sections['content'])) {
+                $this->sections['content'] = $content;
+            }
+            return $this->renderFile($layout, $data);
+        }
+
+        return $content;
+    }
+
     private function renderNoLayout(): string
     {
         return $this->renderFile($this->view, $this->data);

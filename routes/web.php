@@ -37,11 +37,21 @@ use App\Controllers\Admin\UserController;
 use App\Controllers\ApiController;
 use App\Controllers\AuthController;
 use App\Controllers\DashboardController;
+use App\Controllers\MarketingController;
 use App\Core\Router;
 
 $router->get('/', [DashboardController::class, 'index'])
     ->name('dashboard')
     ->middleware('auth', 'password_current');
+
+// ---------------------------------------------------------------------
+// Marketing website (public, no auth)
+// ---------------------------------------------------------------------
+$router->get('/home', [MarketingController::class, 'home'])->name('marketing.home');
+$router->get('/features', [MarketingController::class, 'features'])->name('marketing.features');
+$router->get('/pricing', [MarketingController::class, 'pricing'])->name('marketing.pricing');
+$router->get('/contact', [MarketingController::class, 'contact'])->name('marketing.contact');
+$router->post('/demo-request', [MarketingController::class, 'submitDemo'])->name('marketing.demo');
 
 // ---------------------------------------------------------------------
 // Authentication

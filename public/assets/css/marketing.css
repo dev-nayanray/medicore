@@ -1,0 +1,102 @@
+/* ==========================================================================
+   MediCore Marketing — Custom styles + animations
+   Complements Tailwind utilities. Respects prefers-reduced-motion.
+   ========================================================================== */
+
+/* --- Reveal animation (Intersection Observer) --- */
+.reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  animation: revealIn 0.7s ease forwards;
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@keyframes revealIn {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* --- Floating animation for hero cards --- */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+/* --- Animated blob background --- */
+@keyframes blob {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(20px, -30px) scale(1.05); }
+  66% { transform: translate(-20px, 20px) scale(0.95); }
+}
+.animate-blob {
+  animation: blob 8s ease-in-out infinite;
+}
+
+/* --- Navbar scroll effect --- */
+#navbar {
+  background: transparent;
+  box-shadow: none;
+}
+#navbar.scrolled {
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 1px 12px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(8px);
+}
+
+/* --- Showcase tab active state --- */
+.showcase-tab-active {
+  border-color: #14b8a6 !important;
+  color: #14b8a6 !important;
+  background: rgba(20, 184, 166, 0.1);
+}
+
+/* --- FAQ accordion --- */
+.faq-answer {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.35s ease, padding 0.35s ease;
+}
+.faq-answer.open {
+  max-height: 500px;
+}
+
+/* --- Button hover effects --- */
+.btn-glow {
+  position: relative;
+  overflow: hidden;
+}
+.btn-glow::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, rgba(255,255,255,0.2) 0, transparent 70%);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.btn-glow:hover::after {
+  opacity: 1;
+}
+
+/* --- Smooth scroll offset for anchor links --- */
+html { scroll-padding-top: 5rem; }
+
+/* --- Reduced motion --- */
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1 !important;
+    transform: none !important;
+    animation: none !important;
+  }
+  .animate-float,
+  .animate-blob {
+    animation: none !important;
+  }
+  * {
+    scroll-behavior: auto !important;
+  }
+}
