@@ -341,73 +341,126 @@
 
     /* ------------------------------------------------------------------
        Chart.js — only renders canvases that exist (real data only)
+       Stores chart instances for theme re-rendering on dark mode toggle.
     ------------------------------------------------------------------ */
+    window.MediCoreCharts = {
+        instances: [],
+        retheme: function () {
+            this.instances.forEach(function (c) { c.destroy(); });
+            this.instances = [];
+            initCharts();
+        }
+    };
+
     function initCharts() {
         if (typeof window.Chart === 'undefined') return;
 
         var isDark = document.documentElement.classList.contains('dark');
         var gridColor = isDark ? 'rgba(148,163,184,.14)' : 'rgba(100,116,139,.14)';
         var tickColor = isDark ? '#94a3b8' : '#64748b';
+        var tooltipBg = isDark ? 'rgba(10, 20, 35, .95)' : 'rgba(11, 31, 58, .94)';
 
         var appointments = document.getElementById('appointmentsChart');
         if (appointments) {
-            new window.Chart(appointments, {
+            var labels = JSON.parse(appointments.dataset.labels || '[]');
+            var values = JSON.parse(appointments.dataset.values || '[]');
+
+            // Build gradient
+            var ctx = appointments.getContext('2d');
+            var gradient = ctx.createLinearGradient(0, 0, 0, 180);
+            gradient.addColorStop(0, 'rgba(20, 184, 166, 0.25)');
+            gradient.addColorStop(1, 'rgba(20, 184, 166, 0.02)');
+
+            var inst = new window.Chart(appointments, {
                 type: 'line',
                 data: {
-                    labels: JSON.parse(appointments.dataset.labels || '[]'),
+                    labels: labels,
                     datasets: [{
                         label: 'Appointments',
-                        data: JSON.parse(appointments.dataset.values || '[]'),
+                        data: values,
                         borderColor: '#14b8a6',
-                        backgroundColor: 'rgba(20,184,166,.12)',
+                        backgroundColor: gradient,
                         fill: true,
-                        tension: 0.35,
-                        borderWidth: 2,
-                        pointRadius: 3,
-                        pointBackgroundColor: '#14b8a6'
+                        tension: 0.4,
+                        borderWidth: 2.5,
+                        pointRadius: 0,
+                        pointHoverRadius: 5,
+                        pointBackgroundColor: '#14b8a6',
+                        pointHoverBorderColor: '#fff',
+                        pointHoverBorderWidth: 2
                     }]
                 },
-                options: chartOptions(gridColor, tickColor, { stepSize: 1 })
+                options: chartOptions(gridColor, tickColor, tooltipBg, {
+                    stepSize: 1,
+                    animation: { duration: 800, easing: 'easeOutQuart' },
+                    interaction: { mode: 'index', intersect: false }
+                })
             });
+            window.MediCoreCharts.instances.push(inst);
         }
 
         var revenue = document.getElementById('revenueChart');
         if (revenue) {
-            new window.Chart(revenue, {
+            var rLabels = JSON.parse(revenue.dataset.labels || '[]');
+            var rValues = JSON.parse(revenue.dataset.values || '[]');
+
+            var rCtx = revenue.getContext('2d');
+            var rGradient = rCtx.createLinearGradient(0, 0, 0, 180);
+            rGradient.addColorStop(0, 'rgba(58, 115, 166, 0.9)');
+            rGradient.addColorStop(1, 'rgba(58, 115, 166, 0.5)');
+
+            var rInst = new window.Chart(revenue, {
                 type: 'bar',
                 data: {
-                    labels: JSON.parse(revenue.dataset.labels || '[]'),
+                    labels: rLabels,
                     datasets: [{
                         label: 'Revenue',
-                        data: JSON.parse(revenue.dataset.values || '[]'),
-                        backgroundColor: 'rgba(58,115,166,.75)',
+                        data: rValues,
+                        backgroundColor: rGradient,
                         hoverBackgroundColor: '#2a5a88',
-                        borderRadius: 6,
-                        maxBarThickness: 34
+                        borderRadius: 8,
+                        maxBarThickness: 38,
+                        borderWidth: 0
                     }]
                 },
-                options: chartOptions(gridColor, tickColor, {})
+                options: chartOptions(gridColor, tickColor, tooltipBg, {
+                    animation: { duration: 900, easing: 'easeOutQuart' }
+                })
             });
+            window.MediCoreCharts.instances.push(rInst);
         }
     }
 
-    function chartOptions(gridColor, tickColor, extra) {
+    function chartOptions(gridColor, tickColor, tooltipBg, extra) {
         return Object.assign({
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
                 legend: { display: false },
                 tooltip: {
-                    backgroundColor: 'rgba(11,31,58,.94)',
-                    padding: 10,
+                    backgroundColor: tooltipBg,
+                    padding: 12,
                     cornerRadius: 8,
-                    titleFont: { size: 12 },
-                    bodyFont: { size: 12 }
+                    titleFont: { size: 12, weight: '600' },
+                    bodyFont: { size: 12 },
+                    borderColor: 'rgba(45, 212, 191, .25)',
+                    borderWidth: 1,
+                    displayColors: false,
+                    titleColor: '#fff',
+                    bodyColor: 'rgba(255, 255, 255, .85)'
                 }
             },
             scales: {
-                x: { grid: { display: false }, ticks: { color: tickColor, font: { size: 11 } } },
-                y: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 11 } }, border: { display: false } }
+                x: {
+                    grid: { display: false },
+                    ticks: { color: tickColor, font: { size: 11 } },
+                    border: { display: false }
+                },
+                y: {
+                    grid: { color: gridColor, drawTicks: false },
+                    ticks: { color: tickColor, font: { size: 11 }, padding: 8 },
+                    border: { display: false }
+                }
             }
         }, extra);
     }

@@ -63,19 +63,21 @@
     calendar: '<div class="grid grid-cols-7 gap-px bg-slate-700 rounded-lg overflow-hidden"><div class="bg-slate-900 p-2 text-center"><p class="text-[10px] text-slate-400">Sun</p></div><div class="bg-slate-900 p-2 text-center"><p class="text-[10px] text-slate-400">Mon</p></div><div class="bg-slate-900 p-2 text-center"><p class="text-[10px] text-slate-400">Tue</p></div><div class="bg-slate-900 p-2 text-center"><p class="text-[10px] text-slate-400">Wed</p></div><div class="bg-slate-900 p-2 text-center"><p class="text-[10px] text-slate-400">Thu</p></div><div class="bg-slate-900 p-2 text-center"><p class="text-[10px] text-slate-400">Fri</p></div><div class="bg-slate-900 p-2 text-center"><p class="text-[10px] text-slate-400">Sat</p></div><div class="bg-slate-800 p-3 min-h-[60px]"><div class="rounded bg-teal-500/20 px-1 py-0.5 text-[9px] text-teal-400">09:00 Sarah</div></div><div class="bg-slate-800 p-3 min-h-[60px]"><div class="rounded bg-teal-500/20 px-1 py-0.5 text-[9px] text-teal-400">10:00 Kamal</div></div><div class="bg-slate-800 p-3 min-h-[60px]"></div><div class="bg-slate-800 p-3 min-h-[60px]"><div class="rounded bg-amber-500/20 px-1 py-0.5 text-[9px] text-amber-400">11:00 Rahim</div></div><div class="bg-slate-800 p-3 min-h-[60px]"><div class="rounded bg-teal-500/20 px-1 py-0.5 text-[9px] text-teal-400">14:00 Farhana</div></div><div class="bg-slate-800 p-3 min-h-[60px]"></div><div class="bg-slate-800 p-3 min-h-[60px]"></div></div>',
     billing: '<div class="rounded-xl bg-slate-800 p-4"><div class="flex items-center justify-between"><span class="text-sm font-medium text-white">INV-2026-00001</span><span class="rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs text-emerald-400">Paid</span></div><p class="mt-1 text-xs text-slate-400">Kamal Hossain · ৳1,500 · Cash</p></div><div class="mt-2 rounded-xl bg-slate-800 p-4"><div class="flex items-center justify-between"><span class="text-sm font-medium text-white">INV-2026-00002</span><span class="rounded-full bg-amber-500/20 px-2 py-0.5 text-xs text-amber-400">Partial</span></div><p class="mt-1 text-xs text-slate-400">Nasrin Akter · ৳2,000 / ৳800 paid</p></div><div class="mt-2 rounded-xl bg-slate-800 p-4"><div class="flex items-center justify-between"><span class="text-sm font-medium text-white">INV-2026-00003</span><span class="rounded-full bg-slate-500/20 px-2 py-0.5 text-xs text-slate-400">Draft</span></div><p class="mt-1 text-xs text-slate-400">Abdullah Mamun · ৳3,500 · Pending</p></div>',
   };
-  window.switchTab = function (tab) {
+  window.switchTab = function (tab, evt) {
     if (!showcaseContent) return;
+    // Update active tab first
+    var tabs = document.querySelectorAll('#showcase-tabs button');
+    tabs.forEach(function (t) { t.classList.remove('showcase-tab-active'); });
+    if (evt && evt.currentTarget) { evt.currentTarget.classList.add('showcase-tab-active'); }
+
     showcaseContent.style.opacity = '0';
     showcaseContent.style.transform = 'translateY(8px)';
     setTimeout(function () {
       showcaseContent.innerHTML = showcaseData[tab] || showcaseData.dashboard;
       showcaseContent.style.opacity = '1';
       showcaseContent.style.transform = 'translateY(0)';
+      if (window.lucide) window.lucide.createIcons();
     }, 200);
-    // Update active tab
-    var tabs = document.querySelectorAll('#showcase-tabs button');
-    tabs.forEach(function (t) { t.classList.remove('showcase-tab-active'); });
-    event.currentTarget.classList.add('showcase-tab-active');
   };
 
   // --- FAQ accordion ---
@@ -83,9 +85,15 @@
     var answer = document.querySelector('.faq-answer-' + index);
     var icon = document.querySelector('.faq-icon-' + index);
     if (!answer) return;
-    answer.classList.toggle('open');
+    var isOpen = answer.classList.toggle('open');
     if (icon) {
-      icon.style.transform = answer.classList.contains('open') ? 'rotate(180deg)' : 'rotate(0)';
+      icon.classList.toggle('open', isOpen);
+      // For Lucide-rendered icons, rotate the parent <i>
+      var svg = icon.querySelector('svg');
+      if (svg) {
+        svg.style.transform = isOpen ? 'rotate(180deg)' : 'rotate(0)';
+        svg.style.transition = 'transform 320ms cubic-bezier(.16,1,.3,1)';
+      }
     }
   };
 

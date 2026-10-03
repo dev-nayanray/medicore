@@ -78,9 +78,13 @@ $menu = [
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
+<meta name="theme-color" content="#0b1f3a">
 <script>window.MEDICORE_BASE = <?= json_encode(rtrim(url('/'), '/')) ?>;</script>
 <title><?= e($title) ?> · <?= e($hospitalName) ?></title>
 <link rel="icon" type="image/svg+xml" href="<?= url('assets/img/favicon.svg') ?>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 
 <script>
 /* Theme bootstrap — must run before first paint to avoid a flash. */
@@ -110,7 +114,10 @@ tailwind.config = {
                 sans: ['Inter', 'Segoe UI', 'system-ui', '-apple-system', 'sans-serif']
             },
             boxShadow: {
-                card: '0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 3px 0 rgb(15 23 42 / 0.06)'
+                card: '0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 3px 0 rgb(15 23 42 / 0.06)',
+                soft: '0 2px 8px -2px rgb(15 23 42 / 0.08), 0 4px 16px -4px rgb(15 23 42 / 0.06)',
+                pop: '0 12px 32px -8px rgb(15 23 42 / 0.18), 0 4px 12px -2px rgb(15 23 42 / 0.08)',
+                glow: '0 0 40px -10px rgb(13 148 136 / 0.35)'
             }
         }
     }
@@ -119,13 +126,13 @@ tailwind.config = {
 <link rel="stylesheet" href="<?= asset('css/app.css') ?>">
 </head>
 
-<body class="h-full font-sans bg-slate-100 text-slate-800 dark:bg-slate-950 dark:text-slate-100 antialiased selection:bg-teal-500/20">
+<body class="h-full font-sans bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100 antialiased selection:bg-teal-500/20">
 
 <div x-data="layout" class="min-h-full">
 
     <!-- ============================== Sidebar ============================== -->
     <aside id="sidebar"
-           class="fixed inset-y-0 left-0 z-40 flex w-72 flex-col bg-navy-950 text-slate-300 transition-all duration-200 dark:bg-slate-900 dark:border-r dark:border-slate-800
+           class="fixed inset-y-0 left-0 z-40 flex w-72 flex-col bg-navy-950 text-slate-300 transition-all duration-300 ease-out dark:bg-slate-900 dark:border-r dark:border-slate-800
                   lg:translate-x-0"
            :class="[
                collapsed ? 'lg:w-[76px]' : 'lg:w-72',
@@ -133,17 +140,19 @@ tailwind.config = {
            ]">
 
         <!-- Brand -->
-        <div class="flex h-16 items-center gap-3 px-5 shrink-0" :class="collapsed ? 'lg:justify-center lg:px-2' : ''">
-            <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-teal-400 to-teal-600 shadow-lg shadow-teal-900/40">
-                <svg class="h-5 w-5 text-white" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                    <path d="M10 3h4v7h7v4h-7v7h-4v-7H3v-4h7V3z"/>
-                </svg>
-            </span>
-            <div class="leading-tight" :class="collapsed ? 'lg:hidden' : ''">
-                <p class="text-[15px] font-semibold tracking-tight text-white">MediCore</p>
-                <p class="text-[11px] text-slate-400">Hospital Suite</p>
-            </div>
-            <button type="button" class="ml-auto rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white lg:hidden"
+        <div class="relative flex h-16 items-center gap-3 px-5 shrink-0 border-b border-white/5" :class="collapsed ? 'lg:justify-center lg:px-2' : ''">
+            <a href="<?= url('/') ?>" class="flex items-center gap-2.5 group" aria-label="Back to dashboard">
+                <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-teal-400 to-teal-600 shadow-lg shadow-teal-900/40 transition-transform group-hover:scale-105">
+                    <svg class="h-5 w-5 text-white" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path d="M10 3h4v7h7v4h-7v7h-4v-7H3v-4h7V3z"/>
+                    </svg>
+                </span>
+                <div class="leading-tight" :class="collapsed ? 'lg:hidden' : ''">
+                    <p class="text-[15px] font-semibold tracking-tight text-white">MediCore</p>
+                    <p class="text-[11px] text-slate-400">Hospital Suite</p>
+                </div>
+            </a>
+            <button type="button" class="ml-auto rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white lg:hidden transition-colors"
                     @click="sidebarOpen = false" aria-label="Close menu">
                 <i data-lucide="x" class="h-5 w-5"></i>
             </button>
@@ -153,7 +162,7 @@ tailwind.config = {
         <nav class="flex-1 space-y-5 overflow-y-auto px-3 py-4 scrollbar-thin">
             <?php foreach ($menu as $section): ?>
                 <div>
-                    <p class="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500"
+                    <p class="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500/80"
                        :class="collapsed ? 'lg:hidden' : ''"><?= e($section['label']) ?></p>
                     <ul class="space-y-0.5">
                         <?php foreach ($section['items'] as $item): ?>
@@ -174,7 +183,7 @@ tailwind.config = {
                                             <span class="ml-auto rounded-full bg-white/5 px-2 py-0.5 text-[10px] font-medium text-slate-500"
                                                   :class="collapsed ? 'lg:hidden' : ''">Soon</span>
                                         <?php elseif ($isActive): ?>
-                                            <span class="ml-auto h-1.5 w-1.5 rounded-full bg-teal-400" :class="collapsed ? 'lg:hidden' : ''"></span>
+                                            <span class="ml-auto h-1.5 w-1.5 rounded-full bg-teal-400 animate-pulse" :class="collapsed ? 'lg:hidden' : ''"></span>
                                         <?php endif; ?>
                                 <?php if ($item['soon']): ?></button><?php else: ?></a><?php endif; ?>
                             </li>
@@ -184,10 +193,10 @@ tailwind.config = {
             <?php endforeach; ?>
         </nav>
 
-        <!-- Sidebar footer: signed-in identity -->
+        <!-- Sidebar footer: signed-in identity + version -->
         <div class="border-t border-white/5 p-3 shrink-0">
-            <div class="flex items-center gap-3 rounded-xl px-2 py-2">
-                <span class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-teal-500/15 text-[12px] font-semibold text-teal-300 ring-1 ring-teal-500/30">
+            <div class="flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-white/5 transition-colors">
+                <span class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-teal-500/20 to-teal-700/20 text-[12px] font-semibold text-teal-300 ring-1 ring-teal-500/30">
                     <?= e(initials((string) ($user['name'] ?? 'U'))) ?>
                 </span>
                 <div class="min-w-0" :class="collapsed ? 'lg:hidden' : ''">
@@ -203,33 +212,39 @@ tailwind.config = {
          @click="sidebarOpen = false" x-cloak></div>
 
     <!-- ============================== Main column ============================== -->
-    <div class="flex min-h-full flex-col transition-all duration-200 lg:pl-72" :class="collapsed ? 'lg:pl-[76px]' : 'lg:pl-72'">
+    <div class="flex min-h-full flex-col transition-all duration-300 ease-out lg:pl-72" :class="collapsed ? 'lg:pl-[76px]' : 'lg:pl-72'">
 
         <!-- Topbar -->
         <header class="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-slate-200/80 bg-white/85 px-4 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/85 sm:px-6">
-            <button type="button" class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 lg:hidden"
+            <button type="button" class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 lg:hidden transition-colors"
                     @click="sidebarOpen = true" aria-label="Open menu">
                 <i data-lucide="menu" class="h-5 w-5"></i>
             </button>
-            <button type="button" class="hidden rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200 lg:block"
+            <button type="button" class="hidden rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200 lg:block transition-colors"
                     @click="toggleCollapse()" aria-label="Toggle sidebar" title="Toggle sidebar ( [ )">
-                <i data-lucide="panel-left-close" class="h-5 w-5 transition-transform" :class="collapsed ? 'rotate-180' : ''"></i>
+                <i data-lucide="panel-left-close" class="h-5 w-5 transition-transform duration-300" :class="collapsed ? 'rotate-180' : ''"></i>
             </button>
 
-            <!-- Global search -->
+            <!-- Global search — command palette style -->
             <div class="relative flex-1 max-w-md" x-data="globalSearch">
                 <i data-lucide="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"></i>
                 <input type="text" id="global-search" autocomplete="off" x-model="query" @focus="open = true" @input.debounce.300ms="search()"
                        @keydown.escape.window="open = false"
                        placeholder="Search staff, activity…"
-                       class="input pl-9 pr-14 text-sm">
-                <kbd class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-400 dark:border-slate-700 dark:bg-slate-800">Ctrl K</kbd>
+                       class="input pl-9 pr-14 text-sm bg-slate-50 dark:bg-slate-800/50">
+                <kbd class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">Ctrl K</kbd>
 
                 <div x-show="open && query.length > 0" @click.outside="open = false" x-cloak
-                     class="absolute left-0 right-0 top-full z-30 mt-2 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10 dark:border-slate-700 dark:bg-slate-900">
-                    <div class="max-h-96 overflow-y-auto p-2">
+                     x-transition:enter="transition ease-out duration-150"
+                     x-transition:enter-start="opacity-0 -translate-y-1"
+                     x-transition:enter-end="opacity-100 translate-y-0"
+                     class="absolute left-0 right-0 top-full z-30 mt-2 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-pop dark:border-slate-700 dark:bg-slate-900">
+                    <div class="max-h-96 overflow-y-auto p-2 scrollbar-thin">
                         <template x-if="loading">
-                            <p class="px-3 py-6 text-center text-sm text-slate-400">Searching…</p>
+                            <div class="px-3 py-6 text-center">
+                                <div class="mc-spinner mx-auto"></div>
+                                <p class="mt-2 text-sm text-slate-400">Searching…</p>
+                            </div>
                         </template>
                         <template x-if="!loading && results.length === 0 && modules.length === 0">
                             <p class="px-3 py-6 text-center text-sm text-slate-400">No matches found.</p>
@@ -238,7 +253,7 @@ tailwind.config = {
                             <div class="mb-1">
                                 <p class="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400" x-text="group.label"></p>
                                 <template x-for="item in group.results" :key="item.title">
-                                    <a :href="item.url" class="flex items-start gap-3 rounded-lg px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800">
+                                    <a :href="item.url" class="flex items-start gap-3 rounded-lg px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                                         <span class="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-teal-500/10 text-teal-600 dark:text-teal-400">
                                             <i data-lucide="corner-down-right" class="h-3.5 w-3.5"></i>
                                         </span>
@@ -281,22 +296,25 @@ tailwind.config = {
                     <button type="button" @click="toggle()" class="icon-btn relative" aria-label="Notifications">
                         <i data-lucide="bell" class="h-[18px] w-[18px]"></i>
                         <span x-show="unread > 0" x-cloak
-                              class="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white"
+                              class="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white ring-2 ring-white dark:ring-slate-900"
                               x-text="unread"></span>
                     </button>
 
-                    <div x-show="open" @click.outside="open = false" x-transition.origin.top.right x-cloak
-                         class="absolute right-0 top-full z-30 mt-2 w-80 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10 dark:border-slate-700 dark:bg-slate-900">
+                    <div x-show="open" @click.outside="open = false" x-cloak
+                         x-transition:enter="transition ease-out duration-150"
+                         x-transition:enter-start="opacity-0 -translate-y-1"
+                         x-transition:enter-end="opacity-100 translate-y-0"
+                         class="absolute right-0 top-full z-30 mt-2 w-80 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-pop dark:border-slate-700 dark:bg-slate-900">
                         <div class="flex items-center justify-between border-b border-slate-100 px-4 py-3 dark:border-slate-800">
                             <p class="text-sm font-semibold">Notifications</p>
                             <span class="text-[11px] text-slate-400">from audit trail</span>
                         </div>
-                        <div class="max-h-80 overflow-y-auto">
+                        <div class="max-h-80 overflow-y-auto scrollbar-thin">
                             <template x-if="items.length === 0">
                                 <p class="px-4 py-8 text-center text-sm text-slate-400">No activity yet.</p>
                             </template>
                             <template x-for="(n, i) in items" :key="i">
-                                <div class="flex gap-3 border-b border-slate-50 px-4 py-3 last:border-0 hover:bg-slate-50 dark:border-slate-800/60 dark:hover:bg-slate-800/50">
+                                <div class="flex gap-3 border-b border-slate-50 px-4 py-3 last:border-0 hover:bg-slate-50 dark:border-slate-800/60 dark:hover:bg-slate-800/50 transition-colors">
                                     <span class="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg"
                                           :class="{
                                               'bg-teal-500/10 text-teal-600 dark:text-teal-400': n.tone === 'teal',
@@ -319,8 +337,8 @@ tailwind.config = {
 
                 <!-- Profile dropdown -->
                 <div class="relative" x-data="{ open: false }">
-                    <button type="button" @click="open = !open" class="flex items-center gap-2 rounded-xl p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Account menu">
-                        <span class="grid h-8 w-8 place-items-center rounded-full bg-navy-900 text-[11px] font-semibold text-white ring-2 ring-white dark:ring-slate-700">
+                    <button type="button" @click="open = !open" class="flex items-center gap-2 rounded-xl p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" aria-label="Account menu">
+                        <span class="grid h-8 w-8 place-items-center rounded-full bg-gradient-to-br from-navy-800 to-navy-950 text-[11px] font-semibold text-white ring-2 ring-white dark:ring-slate-700">
                             <?= e(initials((string) ($user['name'] ?? 'U'))) ?>
                         </span>
                         <span class="hidden text-left leading-tight md:block">
@@ -330,8 +348,11 @@ tailwind.config = {
                         <i data-lucide="chevrons-up-down" class="hidden h-4 w-4 text-slate-400 md:block"></i>
                     </button>
 
-                    <div x-show="open" @click.outside="open = false" x-transition.origin.top.right x-cloak
-                         class="absolute right-0 top-full z-30 mt-2 w-60 overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl shadow-slate-900/10 dark:border-slate-700 dark:bg-slate-900">
+                    <div x-show="open" @click.outside="open = false" x-cloak
+                         x-transition:enter="transition ease-out duration-150"
+                         x-transition:enter-start="opacity-0 -translate-y-1"
+                         x-transition:enter-end="opacity-100 translate-y-0"
+                         class="absolute right-0 top-full z-30 mt-2 w-60 overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-pop dark:border-slate-700 dark:bg-slate-900">
                         <div class="border-b border-slate-100 px-3 py-2.5 dark:border-slate-800">
                             <p class="truncate text-sm font-semibold"><?= e($user['name'] ?? '') ?></p>
                             <p class="mt-1 flex flex-wrap gap-1">
@@ -356,14 +377,14 @@ tailwind.config = {
         <!-- Page body -->
         <main class="flex-1 px-4 py-6 sm:px-6 lg:px-8">
             <!-- Breadcrumbs -->
-            <nav class="mb-4 flex items-center gap-1.5 text-[13px] text-slate-400" aria-label="Breadcrumb">
-                <a href="<?= url('/') ?>" class="inline-flex items-center gap-1 hover:text-teal-600 dark:hover:text-teal-400">
+            <nav class="mb-5 flex items-center gap-1.5 text-[13px] text-slate-400" aria-label="Breadcrumb">
+                <a href="<?= url('/') ?>" class="inline-flex items-center gap-1 hover:text-teal-600 dark:hover:text-teal-400 transition-colors">
                     <i data-lucide="home" class="h-3.5 w-3.5"></i>Home
                 </a>
                 <?php foreach ($breadcrumbs as $label => $href): ?>
-                    <i data-lucide="chevron-right" class="h-3.5 w-3.5"></i>
+                    <i data-lucide="chevron-right" class="h-3.5 w-3.5 text-slate-300 dark:text-slate-600"></i>
                     <?php if (is_string($href) && $href !== ''): ?>
-                        <a href="<?= e($href) ?>" class="hover:text-teal-600 dark:hover:text-teal-400"><?= e($label) ?></a>
+                        <a href="<?= e($href) ?>" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors"><?= e($label) ?></a>
                     <?php else: ?>
                         <span class="font-medium text-slate-600 dark:text-slate-300"><?= e($label) ?></span>
                     <?php endif; ?>
@@ -374,7 +395,7 @@ tailwind.config = {
         </main>
 
         <!-- Footer -->
-        <footer class="border-t border-slate-200/80 px-4 py-3.5 sm:px-6 lg:px-8 dark:border-slate-800">
+        <footer class="border-t border-slate-200/80 bg-white/50 px-4 py-3.5 sm:px-6 lg:px-8 dark:border-slate-800 dark:bg-slate-900/30">
             <div class="flex flex-col items-center justify-between gap-2 text-[11.5px] text-slate-400 sm:flex-row">
                 <p>
                     <span class="font-medium text-slate-500 dark:text-slate-400">MediCore</span> v<?= e(config('app.version')) ?>
@@ -382,7 +403,10 @@ tailwind.config = {
                 </p>
                 <p class="flex items-center gap-3">
                     <span class="inline-flex items-center gap-1.5">
-                        <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                        <span class="relative flex h-1.5 w-1.5">
+                            <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+                            <span class="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                        </span>
                         DB ready
                     </span>
                     <span class="inline-flex items-center gap-1.5">PHP <?= e(PHP_VERSION) ?></span>
@@ -396,9 +420,11 @@ tailwind.config = {
 <!-- Confirmation dialog host — forms with data-confirm="Title|Message[|danger]" route through here -->
 <div x-data="confirmDialog" x-cloak>
     <div x-show="open" class="fixed inset-0 z-50 grid place-items-center p-4" role="dialog" aria-modal="true">
-        <div class="absolute inset-0 bg-navy-950/60 backdrop-blur-sm" @click="resolve(false)"></div>
-        <div x-show="open" x-transition.scale.origin.center
-             class="relative w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+        <div class="absolute inset-0 bg-navy-950/60 backdrop-blur-sm mc-backdrop" @click="resolve(false)"></div>
+        <div x-show="open" x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 scale-95"
+             x-transition:enter-end="opacity-100 scale-100"
+             class="relative w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-pop dark:border-slate-700 dark:bg-slate-900">
             <span class="grid h-11 w-11 place-items-center rounded-xl"
                   :class="danger ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400' : 'bg-teal-500/10 text-teal-600 dark:text-teal-400'">
                 <i :data-lucide="danger ? 'alert-triangle' : 'help-circle'" class="h-5 w-5"></i>
@@ -416,7 +442,13 @@ tailwind.config = {
 <!-- Toast host -->
 <div x-data="toasts" class="pointer-events-none fixed right-4 top-4 z-50 flex w-80 flex-col gap-2">
     <template x-for="toast in list" :key="toast.id">
-        <div x-show="toast.visible" x-transition class="pointer-events-auto flex items-start gap-3 rounded-xl border p-3.5 shadow-lg"
+        <div x-show="toast.visible" x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 translate-x-8"
+             x-transition:enter-end="opacity-100 translate-x-0"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0 translate-x-8"
+             class="pointer-events-auto flex items-start gap-3 rounded-xl border p-3.5 shadow-lg"
              :class="{
                  'border-emerald-200 bg-white dark:border-emerald-900/60 dark:bg-slate-900': toast.type === 'success',
                  'border-rose-200 bg-white dark:border-rose-900/60 dark:bg-slate-900': toast.type === 'error',
@@ -434,7 +466,7 @@ tailwind.config = {
                 <p class="text-[13px] font-semibold text-slate-800 dark:text-slate-100" x-text="toast.title"></p>
                 <p class="mt-0.5 text-xs leading-relaxed text-slate-500 dark:text-slate-400" x-text="toast.message"></p>
             </div>
-            <button type="button" class="shrink-0 rounded p-0.5 text-slate-400 hover:text-slate-600" @click="dismiss(toast.id)" aria-label="Dismiss">
+            <button type="button" class="shrink-0 rounded p-0.5 text-slate-400 hover:text-slate-600 transition-colors" @click="dismiss(toast.id)" aria-label="Dismiss">
                 <i data-lucide="x" class="h-3.5 w-3.5"></i>
             </button>
         </div>
