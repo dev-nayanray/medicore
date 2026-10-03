@@ -12,6 +12,7 @@ declare(strict_types=1);
  * global middleware. `can:` gates enforce server-side authorization.
  */
 
+use App\Controllers\Admin\AdmissionController;
 use App\Controllers\Admin\AuditLogController;
 use App\Controllers\Admin\AppointmentController;
 use App\Controllers\Admin\BillingController;
@@ -21,8 +22,10 @@ use App\Controllers\Admin\DoctorController;
 use App\Controllers\Admin\ExpenseController;
 use App\Controllers\Admin\InventoryController;
 use App\Controllers\Admin\LaboratoryController;
+use App\Controllers\Admin\NotificationController;
 use App\Controllers\Admin\PharmacyController;
 use App\Controllers\Admin\PrescriptionController;
+use App\Controllers\Admin\ReportsController;
 use App\Controllers\Admin\ServiceController;
 use App\Controllers\Admin\StaffController;
 use App\Controllers\Admin\PatientController;
@@ -472,6 +475,45 @@ $router->group(['prefix' => '/admin', 'middleware' => ['auth', 'password_current
         ->name('laboratory.acknowledge')->middleware('can:laboratory.update');
     $r->get('/laboratory/{id}/print', [LaboratoryController::class, 'printReport'])
         ->name('laboratory.print')->middleware('can:laboratory.view');
+
+    // --- Bed Management & Admissions ------------------------------------
+    $r->get('/beds', [AdmissionController::class, 'bedsIndex'])
+        ->name('beds.index')->middleware('can:beds.view');
+    $r->get('/beds/wards', [AdmissionController::class, 'wardsIndex'])
+        ->name('beds.wards')->middleware('can:beds.view');
+    $r->post('/beds/wards', [AdmissionController::class, 'storeWard'])
+        ->name('beds.wards.store')->middleware('can:beds.update');
+    $r->post('/beds/rooms', [AdmissionController::class, 'storeRoom'])
+        ->name('beds.rooms.store')->middleware('can:beds.update');
+    $r->post('/beds/{id}/status', [AdmissionController::class, 'setBedStatus'])
+        ->name('beds.status')->middleware('can:beds.update');
+
+    $r->get('/admissions', [AdmissionController::class, 'index'])
+        ->name('admissions.index')->middleware('can:admissions.view');
+    $r->get('/admissions/create', [AdmissionController::class, 'create'])
+        ->name('admissions.create')->middleware('can:admissions.create');
+    $r->post('/admissions', [AdmissionController::class, 'store'])
+        ->name('admissions.store')->middleware('can:admissions.create');
+    $r->get('/admissions/{id}', [AdmissionController::class, 'show'])
+        ->name('admissions.show')->middleware('can:admissions.view');
+    $r->post('/admissions/{id}/transfer', [AdmissionController::class, 'transfer'])
+        ->name('admissions.transfer')->middleware('can:admissions.update');
+    $r->post('/admissions/{id}/discharge', [AdmissionController::class, 'discharge'])
+        ->name('admissions.discharge')->middleware('can:admissions.update');
+
+    // --- Reports ---------------------------------------------------------
+    $r->get('/reports', [ReportsController::class, 'index'])
+        ->name('reports.index')->middleware('can:reports.view');
+    $r->get('/reports/export', [ReportsController::class, 'export'])
+        ->name('reports.export')->middleware('can:reports.export');
+
+    // --- Notifications ---------------------------------------------------
+    $r->get('/notifications', [NotificationController::class, 'index'])
+        ->name('notifications.index')->middleware('auth');
+    $r->post('/notifications/{id}/read', [NotificationController::class, 'markRead'])
+        ->name('notifications.read')->middleware('auth');
+    $r->post('/notifications/read-all', [NotificationController::class, 'markAllRead'])
+        ->name('notifications.read_all')->middleware('auth');
 
     // --- Roles & permissions ---------------------------------------------
     $r->get('/roles', [RoleController::class, 'index'])

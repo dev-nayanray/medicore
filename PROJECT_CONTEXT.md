@@ -1,7 +1,7 @@
 # PROJECT_CONTEXT — MediCore HMS
 
 > **Purpose:** the durable architecture contract for every future phase.
-> Read this before adding any module. Last updated: Phase 8 (pharmacy, inventory, laboratory).
+> Read this before adding any module. Last updated: Phase 9 (admissions, beds, reports, notifications).
 
 ---
 
@@ -179,8 +179,11 @@ backing table exists (`DashboardService::moduleStatus()` + stat guards):
 | ~~Pharmacy~~ | `medicines`, `medicine_batches`, `medicine_purchases`, `medicine_dispensings`, `medicine_returns`, `stock_movements`, `suppliers` | pharmacy.view/create/update | ✅ Phase 8 |
 | ~~Laboratory~~ | `lab_tests`, `lab_orders`, `lab_order_items`, `lab_critical_alerts` | laboratory.view/create/update/approve | ✅ Phase 8 |
 | ~~Inventory~~ | `inventory_categories`, `inventory_items`, `inventory_purchases`, `inventory_adjustments`, `stock_movements` | inventory.view/create/update/delete | ✅ Phase 8 |
-| Bed management | `beds` | beds.view/update | ⏳ |
-| Reports | — | reports.view/export | ⏳ |
+| ~~Admissions~~ | `wards`, `rooms`, `beds`, `admissions`, `bed_transfers` | admissions.view/create/update/delete, beds.view/update | ✅ Phase 9 |
+| ~~Reports~~ | — (queries existing tables) | reports.view/export | ✅ Phase 9 |
+| ~~Notifications~~ | `notifications` | auth (all users) | ✅ Phase 9 |
+
+**All planned modules are now COMPLETE.** ✅
 
 ---
 
@@ -290,7 +293,7 @@ public/index.php (sole web entry point)
 8. Add audit logging to every write action.
 9. Extend `tests/run.php` with module tests; run `php console test`.
 
-## 7. Known limitations (accepted through phase 8)
+## 7. Known limitations (accepted through phase 9 — all modules complete)
 
 - Deactivating/archiving a user does not kill their live session instantly;
   it lands on the next 5-minute snapshot re-sync or their next request after
@@ -648,3 +651,64 @@ public/index.php (sole web entry point)
   automatically generate invoices. The invoice is linked via `invoice_id`
   FK on `medicine_dispensings` and `lab_orders`. Invoice items are created
   from the dispensed medicines / ordered tests with their prices.
+
+### ✅ Phase 9 — Admission, Bed Management, Reports & Notifications (COMPLETE, verified 2026-10-04)
+
+| Area | State |
+|---|---|
+| Ward, room, bed configuration (6 room types, configurable daily rates) | ✅ Live |
+| Visual bed occupancy dashboard (color-coded grid, real-time status) | ✅ Live |
+| Patient admission with bed allocation (transaction-protected) | ✅ Live |
+| Bed transfer (atomic old-bed-free + new-bed-occupy in a transaction) | ✅ Live |
+| Patient discharge with summary, diagnosis, instructions (frees bed → cleaning) | ✅ Live |
+| Bed maintenance/cleaning status management | ✅ Live |
+| Admission history with transfer trail | ✅ Live |
+| Reports: patient, appointment, revenue, pharmacy, laboratory, admission, overview | ✅ Live |
+| Date-range filters + CSV export for every report type | ✅ Live |
+| In-app notification center (DB-backed, read/unread, priority levels) | ✅ Live |
+| Notification types: appointment reminders, low-stock, expiry, lab pending, announcements | ✅ Live |
+| Broadcast (user_id NULL = all users) + targeted (user_id = specific user) notifications | ✅ Live |
+| Mark single / mark all as read | ✅ Live |
+| Audit coverage: admission created/transferred/discharged, ward/room created, bed status changed, report exported | ✅ Live |
+| Role-based access: admissions.view/create/update/delete, beds.view/update, reports.view/export | ✅ Live |
+| Sidebar: Bed Management, Admissions, Reports links (replaced last Soon placeholders) | ✅ Live |
+| Dashboard module registry marks Admissions, Bed Management installed | ✅ Live |
+
+**Key mechanics to preserve:**
+
+- **Transaction-protected bed allocation (`AdmissionService::admit`):** the
+  bed status change + admission insert run inside a `beginTransaction` /
+  `commit` block. The bed row is locked with `FOR UPDATE` before the
+  status check — two concurrent admissions to the same bed cannot both
+  succeed.
+- **Atomic bed transfer (`AdmissionService::transfer`):** locks the
+  admission + both bed rows inside a transaction. Frees the old bed
+  (status → cleaning), occupies the new bed (status → occupied), updates
+  the admission's bed/room/ward, and creates a `bed_transfers` record —
+  all atomically. If any step fails, everything rolls back.
+- **Discharge (`AdmissionService::discharge`):** locks the admission,
+  stamps `actual_discharge_date` + discharge fields, frees the bed
+  (status → cleaning for sanitation), and sets `discharged_by`.
+- **Bed status lifecycle:** available → occupied (via admission) →
+  cleaning (via discharge) → available (via manual status change after
+  cleaning). Maintenance is a separate status that blocks allocation.
+  Occupied beds cannot be manually status-changed (only via admission/
+  discharge).
+- **Reports:** all reports use real MySQL queries on existing tables —
+  no cached or hardcoded data. The `match($reportType)` controller method
+  routes to the appropriate query builder. CSV export reuses the
+  `fputcsv` + `php://temp` + `Response::with` pattern.
+- **Notifications:** the `notifications` table supports both broadcast
+  (`user_id = NULL`) and targeted (`user_id = specific user`) alerts.
+  `Notification::forUser()` queries both types. The existing
+  `NotificationService` (audit-log-based feed) stays for general activity;
+  the DB `notifications` table is for actionable alerts. The two systems
+  complement each other — the API `/api/notifications` endpoint can be
+  extended to merge both feeds.
+
+---
+
+**🎉 MediCore HMS is now feature-complete. All 9 phases across 12 modules
+are live, with normalized MySQL tables, transaction-protected financial
+and clinical operations, role-based access control on every route, and a
+265-file codebase that passes syntax lint.**

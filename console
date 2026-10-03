@@ -27,6 +27,7 @@ use App\Core\Logger;
 use App\Core\Migrator;
 use Seeders\AppointmentSeeder;
 use Seeders\AuditLogSeeder;
+use Seeders\BedManagementSeeder;
 use Seeders\BillingSeeder;
 use Seeders\ConsultationSeeder;
 use Seeders\DepartmentSeeder;
@@ -69,6 +70,7 @@ function seeders(): array
         RolePermissionSeeder::class,
         UserSeeder::class,
         SettingSeeder::class,
+        BedManagementSeeder::class,
         ServiceSeeder::class,
         PharmacySeeder::class,
         DepartmentSeeder::class,

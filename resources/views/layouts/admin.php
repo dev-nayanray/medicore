@@ -46,7 +46,8 @@ $menu = [
     ],
     [
         'label' => 'Operations', 'items' => [
-            ['key' => 'beds',   'label' => 'Bed Management', 'href' => '#', 'icon' => 'bed-double',  'can' => null, 'soon' => true],
+            ['key' => 'beds',   'label' => 'Bed Management', 'href' => url('/admin/beds'), 'icon' => 'bed-double',  'can' => 'beds.view', 'soon' => false],
+            ['key' => 'admissions', 'label' => 'Admissions', 'href' => url('/admin/admissions'), 'icon' => 'door-open', 'can' => 'admissions.view', 'soon' => false],
             ['key' => 'lab',    'label' => 'Laboratory',     'href' => url('/admin/laboratory'), 'icon' => 'flask-conical','can' => 'laboratory.view', 'soon' => false],
             ['key' => 'pharma', 'label' => 'Pharmacy',       'href' => url('/admin/pharmacy'), 'icon' => 'pill',        'can' => 'pharmacy.view', 'soon' => false],
             ['key' => 'inventory', 'label' => 'Inventory',   'href' => url('/admin/inventory'), 'icon' => 'boxes',  'can' => 'inventory.view', 'soon' => false],
@@ -57,7 +58,7 @@ $menu = [
             ['key' => 'billing',  'label' => 'Billing & Invoices', 'href' => url('/admin/billing'), 'icon' => 'receipt-text', 'can' => 'billing.view', 'soon' => false],
             ['key' => 'services', 'label' => 'Services & Pricing',  'href' => url('/admin/services'), 'icon' => 'tag',          'can' => 'billing.view', 'soon' => false],
             ['key' => 'expenses', 'label' => 'Expenses',             'href' => url('/admin/expenses'), 'icon' => 'trending-down', 'can' => 'expenses.view', 'soon' => false],
-            ['key' => 'reports', 'label' => 'Reports',              'href' => '#', 'icon' => 'chart-pie',    'can' => null, 'soon' => true],
+            ['key' => 'reports', 'label' => 'Reports',              'href' => url('/admin/reports'), 'icon' => 'chart-pie',    'can' => 'reports.view', 'soon' => false],
         ],
     ],
     [
