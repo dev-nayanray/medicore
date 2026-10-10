@@ -356,20 +356,20 @@
         if (typeof window.Chart === 'undefined') return;
 
         var isDark = document.documentElement.classList.contains('dark');
-        var gridColor = isDark ? 'rgba(148,163,184,.14)' : 'rgba(100,116,139,.14)';
-        var tickColor = isDark ? '#94a3b8' : '#64748b';
-        var tooltipBg = isDark ? 'rgba(10, 20, 35, .95)' : 'rgba(11, 31, 58, .94)';
+        var gridColor = isDark ? 'rgba(148,163,184,.14)' : 'rgba(116,134,164,.14)';
+        var tickColor = isDark ? '#94a3b8' : '#7486a4';
+        var tooltipBg = isDark ? 'rgba(10, 20, 35, .95)' : 'rgba(20, 37, 68, .95)';
 
+        // ---- Appointments chart: blue line with gradient area fill ----
         var appointments = document.getElementById('appointmentsChart');
         if (appointments) {
             var labels = JSON.parse(appointments.dataset.labels || '[]');
             var values = JSON.parse(appointments.dataset.values || '[]');
 
-            // Build gradient
             var ctx = appointments.getContext('2d');
-            var gradient = ctx.createLinearGradient(0, 0, 0, 180);
-            gradient.addColorStop(0, 'rgba(20, 184, 166, 0.25)');
-            gradient.addColorStop(1, 'rgba(20, 184, 166, 0.02)');
+            var gradient = ctx.createLinearGradient(0, 0, 0, 200);
+            gradient.addColorStop(0, 'rgba(40, 100, 240, 0.32)');
+            gradient.addColorStop(1, 'rgba(40, 100, 240, 0.02)');
 
             var inst = new window.Chart(appointments, {
                 type: 'line',
@@ -378,14 +378,14 @@
                     datasets: [{
                         label: 'Appointments',
                         data: values,
-                        borderColor: '#14b8a6',
+                        borderColor: '#2864f0',
                         backgroundColor: gradient,
                         fill: true,
                         tension: 0.4,
                         borderWidth: 2.5,
                         pointRadius: 0,
                         pointHoverRadius: 5,
-                        pointBackgroundColor: '#14b8a6',
+                        pointBackgroundColor: '#2864f0',
                         pointHoverBorderColor: '#fff',
                         pointHoverBorderWidth: 2
                     }]
@@ -399,15 +399,18 @@
             window.MediCoreCharts.instances.push(inst);
         }
 
+        // ---- Revenue chart: blue-to-violet gradient bars on dark card ----
         var revenue = document.getElementById('revenueChart');
         if (revenue) {
             var rLabels = JSON.parse(revenue.dataset.labels || '[]');
             var rValues = JSON.parse(revenue.dataset.values || '[]');
 
             var rCtx = revenue.getContext('2d');
-            var rGradient = rCtx.createLinearGradient(0, 0, 0, 180);
-            rGradient.addColorStop(0, 'rgba(58, 115, 166, 0.9)');
-            rGradient.addColorStop(1, 'rgba(58, 115, 166, 0.5)');
+            var rGradient = rCtx.createLinearGradient(0, 0, 0, 200);
+            // Bright bars for dark background — blue to violet
+            rGradient.addColorStop(0, '#60a5fa');
+            rGradient.addColorStop(0.6, '#3b82f6');
+            rGradient.addColorStop(1, '#8b5cf6');
 
             var rInst = new window.Chart(revenue, {
                 type: 'bar',
@@ -417,9 +420,9 @@
                         label: 'Revenue',
                         data: rValues,
                         backgroundColor: rGradient,
-                        hoverBackgroundColor: '#2a5a88',
-                        borderRadius: 8,
-                        maxBarThickness: 38,
+                        hoverBackgroundColor: '#93c5fd',
+                        borderRadius: 6,
+                        maxBarThickness: 32,
                         borderWidth: 0
                     }]
                 },
@@ -443,11 +446,11 @@
                     cornerRadius: 8,
                     titleFont: { size: 12, weight: '600' },
                     bodyFont: { size: 12 },
-                    borderColor: 'rgba(45, 212, 191, .25)',
+                    borderColor: 'rgba(96, 165, 250, .35)',
                     borderWidth: 1,
                     displayColors: false,
                     titleColor: '#fff',
-                    bodyColor: 'rgba(255, 255, 255, .85)'
+                    bodyColor: 'rgba(255, 255, 255, .9)'
                 }
             },
             scales: {

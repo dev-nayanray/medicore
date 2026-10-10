@@ -108,7 +108,17 @@ tailwind.config = {
                     500: '#3a73a6', 600: '#2a5a88', 700: '#234a70', 800: '#1b3a5a', 900: '#122a47',
                     950: '#0b1f3a'
                 },
-                teal: { 450: '#10b3a4' }
+                teal: { 450: '#10b3a4' },
+                brand: {
+                    // Royal blue scale — dashboard primary, sidebar active item, KPI accents
+                    50: '#eff6ff', 100: '#dbeafe', 200: '#bfdbfe', 300: '#93c5fd', 400: '#60a5fa',
+                    500: '#3b82f6', 600: '#2864f0', 700: '#1d4ed8', 800: '#1e40af', 900: '#1e3a8a',
+                    950: '#172554'
+                },
+                canvas: {
+                    // Very light cool blue-gray background
+                    50: '#f8fafc', 100: '#f4f7fc', 200: '#e5ecf5', 300: '#cbd5e1'
+                }
             },
             fontFamily: {
                 sans: ['Inter', 'Segoe UI', 'system-ui', '-apple-system', 'sans-serif']
@@ -117,7 +127,8 @@ tailwind.config = {
                 card: '0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 3px 0 rgb(15 23 42 / 0.06)',
                 soft: '0 2px 8px -2px rgb(15 23 42 / 0.08), 0 4px 16px -4px rgb(15 23 42 / 0.06)',
                 pop: '0 12px 32px -8px rgb(15 23 42 / 0.18), 0 4px 12px -2px rgb(15 23 42 / 0.08)',
-                glow: '0 0 40px -10px rgb(13 148 136 / 0.35)'
+                glow: '0 0 40px -10px rgb(13 148 136 / 0.35)',
+                'glow-brand': '0 8px 24px -8px rgb(40 100 240 / 0.45)'
             }
         }
     }
@@ -126,7 +137,7 @@ tailwind.config = {
 <link rel="stylesheet" href="<?= asset('css/app.css') ?>">
 </head>
 
-<body class="h-full font-sans bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100 antialiased selection:bg-teal-500/20">
+<body class="h-full font-sans bg-canvas-100 text-slate-800 dark:bg-slate-950 dark:text-slate-100 antialiased selection:bg-brand-500/20">
 
 <div x-data="layout" class="min-h-full">
 
@@ -183,7 +194,7 @@ tailwind.config = {
                                             <span class="ml-auto rounded-full bg-white/5 px-2 py-0.5 text-[10px] font-medium text-slate-500"
                                                   :class="collapsed ? 'lg:hidden' : ''">Soon</span>
                                         <?php elseif ($isActive): ?>
-                                            <span class="ml-auto h-1.5 w-1.5 rounded-full bg-teal-400 animate-pulse" :class="collapsed ? 'lg:hidden' : ''"></span>
+                                            <span class="ml-auto h-1.5 w-1.5 rounded-full bg-brand-400 animate-pulse" :class="collapsed ? 'lg:hidden' : ''"></span>
                                         <?php endif; ?>
                                 <?php if ($item['soon']): ?></button><?php else: ?></a><?php endif; ?>
                             </li>

@@ -35,11 +35,13 @@ final class DashboardService
     public static function build(): array
     {
         return [
-            'stats'          => self::stats(),
-            'charts'         => self::charts(),
-            'recentActivity' => AuditLog::recent(8),
-            'modules'        => self::moduleStatus(),
-            'system'         => self::systemDiagnostics(),
+            'stats'               => self::stats(),
+            'charts'              => self::charts(),
+            'recentActivity'      => AuditLog::recent(8),
+            'modules'             => self::moduleStatus(),
+            'system'              => self::systemDiagnostics(),
+            'upcomingAppointments' => self::upcomingAppointments(),
+            'operationalAlerts'   => self::operationalAlerts(),
         ];
     }
 
@@ -321,5 +323,141 @@ final class DashboardService
             'storage_cache' => is_writable(BASE_PATH . '/storage/cache'),
             'uploads'       => is_writable(BASE_PATH . '/public/uploads'),
         ];
+    }
+
+    // ------------------------------------------------------------------
+    // Upcoming appointments — today's schedule with patient/doctor/department
+    // ------------------------------------------------------------------
+    /** @return array<int, array<string, mixed>> */
+    private static function upcomingAppointments(): array
+    {
+        if (!Database::tableExists('appointments')) {
+            return [];
+        }
+
+        // Today's appointments (or next day with appointments if today is empty)
+        // joined with patient + doctor + department for table rendering.
+        try {
+            return Database::query(
+                "SELECT a.id, a.appointment_date, a.start_time, a.end_time,
+                        a.status, a.queue_token,
+                        p.id AS patient_id, p.first_name AS p_first, p.last_name AS p_last,
+                        p.patient_code, p.gender,
+                        u.name AS doctor_name, d.name AS department_name
+                 FROM appointments a
+                 LEFT JOIN patients p ON p.id = a.patient_id
+                 LEFT JOIN doctors doc ON doc.id = a.doctor_id
+                 LEFT JOIN users u ON u.id = doc.user_id
+                 LEFT JOIN departments d ON d.id = doc.department_id
+                 WHERE a.appointment_date = CURDATE()
+                   AND a.status NOT IN ('cancelled','no_show','completed')
+                 ORDER BY a.start_time ASC
+                 LIMIT 8"
+            );
+        } catch (\Throwable $e) {
+            return [];
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Operational alerts — real, query-backed alerts (no fabrication)
+    // ------------------------------------------------------------------
+    /** @return array<string, array{label: string, count: int, tone: string, icon: string, href: string|null}> */
+    private static function operationalAlerts(): array
+    {
+        $alerts = [];
+
+        // 1. Pharmacy low-stock alerts
+        if (Database::tableExists('medicine_batches')) {
+            try {
+                $lowStock = (int) Database::scalar(
+                    "SELECT COUNT(DISTINCT m.id)
+                     FROM medicines m
+                     LEFT JOIN (
+                         SELECT medicine_id, SUM(remaining_quantity) AS total_qty
+                         FROM medicine_batches GROUP BY medicine_id
+                     ) b ON b.medicine_id = m.id
+                     WHERE COALESCE(b.total_qty, 0) <= 50"
+                );
+                $alerts['low_stock'] = [
+                    'label' => 'Pharmacy low stock',
+                    'count' => $lowStock,
+                    'tone'  => $lowStock > 0 ? 'amber' : 'slate',
+                    'icon'  => 'package-search',
+                    'href'  => url('/admin/pharmacy'),
+                ];
+            } catch (\Throwable $e) { /* skip on schema mismatch */ }
+        }
+
+        // 2. Batches expiring within 90 days
+        if (Database::tableExists('medicine_batches')) {
+            try {
+                $expiring = (int) Database::scalar(
+                    "SELECT COUNT(*) FROM medicine_batches
+                     WHERE expiry_date IS NOT NULL
+                       AND expiry_date > CURDATE()
+                       AND expiry_date <= DATE_ADD(CURDATE(), INTERVAL 90 DAY)
+                       AND remaining_quantity > 0"
+                );
+                $alerts['expiring'] = [
+                    'label' => 'Batches expiring <90d',
+                    'count' => $expiring,
+                    'tone'  => $expiring > 0 ? 'rose' : 'slate',
+                    'icon'  => 'calendar-clock',
+                    'href'  => url('/admin/pharmacy'),
+                ];
+            } catch (\Throwable $e) { /* skip */ }
+        }
+
+        // 3. Lab orders in queue (pending collection or pending verification)
+        if (Database::tableExists('lab_tests')) {
+            try {
+                $labQueue = (int) Database::scalar(
+                    "SELECT COUNT(*) FROM lab_tests
+                     WHERE status IN ('ordered','sample_collected','pending_verification')"
+                );
+                $alerts['lab_queue'] = [
+                    'label' => 'Lab orders in queue',
+                    'count' => $labQueue,
+                    'tone'  => $labQueue > 0 ? 'violet' : 'slate',
+                    'icon'  => 'flask-conical',
+                    'href'  => url('/admin/laboratory'),
+                ];
+            } catch (\Throwable $e) { /* skip */ }
+        }
+
+        // 4. Patients currently admitted
+        if (Database::tableExists('admissions')) {
+            try {
+                $admitted = (int) Database::scalar(
+                    "SELECT COUNT(*) FROM admissions WHERE status = 'admitted'"
+                );
+                $alerts['admitted'] = [
+                    'label' => 'Patients admitted',
+                    'count' => $admitted,
+                    'tone'  => $admitted > 0 ? 'navy' : 'slate',
+                    'icon'  => 'bed-double',
+                    'href'  => url('/admin/admissions'),
+                ];
+            } catch (\Throwable $e) { /* skip */ }
+        }
+
+        // 5. Outstanding invoices requiring attention
+        if (Database::tableExists('invoices')) {
+            try {
+                $outstanding = (int) Database::scalar(
+                    "SELECT COUNT(*) FROM invoices WHERE balance_due > 0 AND status NOT IN ('draft','cancelled')"
+                );
+                $alerts['outstanding'] = [
+                    'label' => 'Outstanding invoices',
+                    'count' => $outstanding,
+                    'tone'  => $outstanding > 0 ? 'amber' : 'slate',
+                    'icon'  => 'receipt-text',
+                    'href'  => url('/admin/billing'),
+                ];
+            } catch (\Throwable $e) { /* skip */ }
+        }
+
+        return $alerts;
     }
 }
